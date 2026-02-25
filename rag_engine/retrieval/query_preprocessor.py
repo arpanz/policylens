@@ -30,12 +30,11 @@ class QueryPreprocessor:
         original = query
         result = query.strip()
 
-        # Capitalise the first letter
-        if result:
-            result = result[0].upper() + result[1:]
-
         # Append "?" for question-like phrases that don't already end with one
         if not result.endswith("?") and _QUESTION_STARTERS.match(result):
+            # Capitalise the first letter of question-like phrases
+            if result:
+                result = result[0].upper() + result[1:]
             result = result + "?"
 
         # Collapse multiple spaces
