@@ -29,8 +29,8 @@ class Settings(BaseSettings):
 
     # embedding — local by default
     embedding_provider: str = "local"
-    embedding_model: str = "BAAI/bge-large-en-v1.5"
-    embedding_dimension: int = 1024
+    embedding_model: str = "BAAI/bge-base-en-v1.5"
+    embedding_dimension: int = 768
 
     # llm
     llm_provider: str = "kimi"
