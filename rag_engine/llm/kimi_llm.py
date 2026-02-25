@@ -18,7 +18,7 @@ class KimiLLM(BaseLLM):
     def __init__(
         self,
         model: str | None = None,
-        temperature: float = 0.1,
+        temperature: float = 1,
         max_tokens: int = 2048,
     ) -> None:
         self._model = model or settings.kimi_model
