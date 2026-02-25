@@ -23,3 +23,5 @@ build/
 
 # macOS
 .DS_Store
+rag_engine.egg-info/
+*.egg-info/
