@@ -23,8 +23,9 @@ class Settings(BaseSettings):
     jina_api_key: str = ""
     cohere_api_key: str = ""
 
-    # supabase
+    # supabase / vector store
     vector_table_name: str = "policy_chunks"
+    vector_store_provider: str = "supabase"
 
     # embedding — local by default
     embedding_provider: str = "local"
