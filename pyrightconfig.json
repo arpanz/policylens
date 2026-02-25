@@ -1,0 +1,25 @@
+{
+    "include": [
+        "rag_engine"
+    ],
+    "exclude": [
+        "**/__pycache__",
+        ".venv",
+        "node_modules"
+    ],
+    "venvPath": ".",
+    "venv": ".venv",
+    "pythonVersion": "3.11",
+    "typeCheckingMode": "basic",
+    "reportMissingImports": false,
+    "reportMissingModuleSource": false,
+    "executionEnvironments": [
+        {
+            "root": ".",
+            "pythonVersion": "3.11",
+            "extraPaths": [
+                "."
+            ]
+        }
+    ]
+}
