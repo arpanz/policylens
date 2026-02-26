@@ -1,0 +1,27 @@
+# Python bytecode
+__pycache__/
+*.pyc
+
+# Environment
+.env
+.venv/
+
+# Parsed documents cache
+parsed_docs/
+.cache/
+
+# Logs
+*.log
+
+# Testing
+.pytest_cache/
+.coverage
+
+# Build artifacts
+dist/
+build/
+
+# macOS
+.DS_Store
+rag_engine.egg-info/
+*.egg-info/

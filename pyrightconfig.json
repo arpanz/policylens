@@ -1,0 +1,29 @@
+{
+    "include": [
+        "rag_engine"
+    ],
+    "exclude": [
+        ".venv",
+        "**/__pycache__",
+        "node_modules"
+    ],
+    "venvPath": "C:\\Users\\KIIT0001\\policyLens\\policylens",
+    "venv": ".venv",
+    "pythonVersion": "3.12",
+    "pythonPlatform": "Windows",
+    "typeCheckingMode": "off",
+    "reportMissingImports": false,
+    "reportMissingModuleSource": false,
+    "reportAttributeAccessIssue": false,
+    "useLibraryCodeForTypes": true,
+    "executionEnvironments": [
+        {
+            "root": ".",
+            "pythonVersion": "3.12",
+            "extraPaths": [
+                ".",
+                "rag_engine"
+            ]
+        }
+    ]
+}
