@@ -1,2 +1,14 @@
-# policylens
-AI to decode and explain complex insurance/mortgage clause in simple easy to understand terms
+---
+title: PolicyLens RAG API
+emoji: 📄
+colorFrom: blue
+colorTo: purple
+sdk: docker
+sdk_version: "0.0.1"
+app_file: Dockerfile
+pinned: false
+---
+
+# PolicyLens RAG API
+
+FastAPI-based RAG engine for insurance policy Q&A.
