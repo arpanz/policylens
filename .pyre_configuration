@@ -1,0 +1,19 @@
+{
+    "source_directories": [
+        {
+            "import_root": ".",
+            "source": "rag_engine"
+        }
+    ],
+    "search_path": [
+        ".venv/Lib/site-packages"
+    ],
+    "python_version": "3.12",
+    "strict": false,
+    "ignore_all_errors": true,
+    "exclude": [
+        ".venv",
+        "**/__pycache__",
+        "node_modules"
+    ]
+}
