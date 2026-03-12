@@ -46,6 +46,7 @@ class ClauseChunker(BaseChunker):
         text: str,
         policy_id: str,
         source_file: str,
+        page_map: dict | None = None,
     ) -> List[Tuple[str, ChunkMetadata]]:
         sections = self._split_into_sections(text)
         results: List[Tuple[str, ChunkMetadata]] = []
@@ -70,7 +71,7 @@ class ClauseChunker(BaseChunker):
                 )
                 results.extend(table_chunks)
                 global_chunk_idx += len(table_chunks)
-                current_page = self._estimate_page(current_page, section_text)
+                current_page = self._resolve_page(text, section_text, page_map, current_page)
                 continue
 
             clause_type = self._detect_clause_type(section_name, section_text)
@@ -116,7 +117,7 @@ class ClauseChunker(BaseChunker):
                     results.append((sub_text, meta))
                     global_chunk_idx += 1
 
-            current_page = self._estimate_page(current_page, section_text)
+            current_page = self._resolve_page(text, section_text, page_map, current_page)
 
         return results
 
@@ -302,3 +303,24 @@ class ClauseChunker(BaseChunker):
     def _estimate_page(current_page: int, text: str) -> int:
         # rough estimate ~3000 chars per page
         return current_page + max(1, len(text) // 3000)
+
+    @staticmethod
+    def _resolve_page(
+        full_text: str,
+        section_text: str,
+        page_map: dict | None,
+        fallback: int,
+    ) -> int:
+        # Use real page_map if available (ingestion path), fall back to estimate for dry-run/test mode
+        if not page_map:
+            return fallback + max(1, len(section_text) // 3000)
+
+        offset = full_text.find(section_text[:80])
+        if offset == -1:
+            return fallback
+
+        candidates = [k for k in page_map if k <= offset]
+        if not candidates:
+            return fallback
+
+        return page_map[max(candidates)]
