@@ -1,5 +1,9 @@
 """Pydantic request / response models for the PolicyDecoder RAG API."""
 
+from __future__ import annotations
+
+from typing import Optional
+
 from pydantic import BaseModel
 
 
@@ -12,11 +16,20 @@ class QueryRequest(BaseModel):
     k: int = 8
 
 
+class SourceItem(BaseModel):
+    section: str
+    clause_type: str
+    page_number: Optional[int] = None
+    highlight_text: Optional[str] = None
+    relevance_score: float
+    snippet: str
+
+
 class QueryResponse(BaseModel):
     answer: str
     policy_id: str
     source_count: int
-    sources: list[dict]
+    sources: list[SourceItem]
     status: str = "success"
 
 
