@@ -20,6 +20,9 @@ class ResponseFormatter:
                 {
                     "section": chunk["metadata"].get("section_name", "Unknown"),
                     "clause_type": chunk["metadata"].get("clause_type", "Unknown"),
+                    "page_number": chunk["metadata"].get("page_number"),
+                    # Full chunk text — frontend uses this to search and highlight exact passage in PDF viewer
+                    "highlight_text": chunk["content"],
                     "relevance_score": round(
                         chunk.get("rerank_score", chunk.get("score", 0)), 4
                     ),
