@@ -30,7 +30,6 @@ _PARSING_INSTRUCTION = (
     " 7. Preserve ALL-CAPS headings as-is — they are legally significant."
 )
 
-PAGE_BREAK_SEPARATOR = "\n\n---PAGE_BREAK---\n\n"
 
 
 class PDFLoader:
@@ -73,7 +72,11 @@ class PDFLoader:
         if not documents:
             raise ValueError(f"LlamaParse returned no pages for {pdf_path}")
 
-        raw_markdown = PAGE_BREAK_SEPARATOR.join(doc.text for doc in documents)
+        # Embed real page numbers as markers so chunker can assign accurate page_number to each chunk
+        parts = []
+        for page_num, doc in enumerate(documents, start=1):
+            parts.append(f"---PAGE_START:{page_num}---\n{doc.text}")
+        raw_markdown = "\n\n".join(parts)
 
         logger.info(
             "Parsed %d page(s) | %s chars",
