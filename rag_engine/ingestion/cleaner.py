@@ -14,6 +14,7 @@ _REMOVE_PATTERNS: list[re.Pattern[str]] = [
     re.compile(r"^CONFIDENTIAL\s*$"),
     re.compile(r"^www\.\S+\.\S+$"),
     re.compile(r"^©.*\d{4}.*$"),
+    re.compile(r"^---PAGE_START:\d+---$"),
     re.compile(r"^---PAGE_BREAK---$"),
     re.compile(r"^_{3,}$"),
     re.compile(r"^\*{3,}$"),
@@ -24,9 +25,31 @@ _HEADING_RE = re.compile(
     r"^(SECTION|PART|ARTICLE|CHAPTER)\s+[IVX\d]+", re.IGNORECASE
 )
 
+_PAGE_MARKER_RE = re.compile(r"^---PAGE_START:(\d+)---$")
+
 
 class DocumentCleaner:
     """Cleans raw markdown produced by the PDF parser."""
+
+    def extract_page_map(self, raw_markdown: str) -> dict[int, int]:
+        """Returns a mapping of character offset → page number, built from
+        PAGE_START markers embedded by PDFLoader.
+
+        Must be called on raw_markdown BEFORE clean() strips the markers.
+        """
+        page_map: dict[int, int] = {}
+        current_page = 1
+        offset = 0
+
+        for line in raw_markdown.splitlines(keepends=True):
+            match = _PAGE_MARKER_RE.match(line.strip())
+            if match:
+                current_page = int(match.group(1))
+            else:
+                page_map[offset] = current_page
+            offset += len(line)
+
+        return page_map
 
     def clean(self, raw_markdown: str) -> str:
         """Run the full cleaning pipeline and return the result.
