@@ -19,7 +19,7 @@ class KimiLLM(BaseLLM):
         self,
         model: str | None = None,
         temperature: float = 1,
-        max_tokens: int = 2048,
+        max_tokens: int = 4096,
     ) -> None:
         self._model = model or settings.kimi_model
         self._temperature = temperature
