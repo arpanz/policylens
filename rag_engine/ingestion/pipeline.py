@@ -51,12 +51,16 @@ class IngestionPipeline:
         raw_markdown = self.loader.load(pdf_path)
         logger.info("Parse complete | %s chars", f"{len(raw_markdown):,}")
 
+        # Extract real page numbers BEFORE clean() strips the PAGE_START markers
+        page_map = self.cleaner.extract_page_map(raw_markdown)
+        logger.info("Page map built | %d page boundaries tracked", len(set(page_map.values())))
+
         # Step 2 — clean markdown
         clean_text = self.cleaner.clean(raw_markdown)
         logger.info("Clean complete | %s chars", f"{len(clean_text):,}")
 
         # Step 3 — clause-aware chunking
-        chunks = self.chunker.chunk(clean_text, policy_id, pdf_path.name)
+        chunks = self.chunker.chunk(clean_text, policy_id, pdf_path.name, page_map=page_map)
         logger.info("Chunking complete | %d chunks produced", len(chunks))
 
         return chunks
