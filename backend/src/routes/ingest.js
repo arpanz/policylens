@@ -151,4 +151,31 @@ router.delete('/policies/:policy_id', authMiddleware, async (req, res) => {
   res.json({ success: true });
 });
 
+// GET /api/policies/:policy_id/summary
+// Fetch the AI-generated summary for a policy
+router.get('/policies/:policy_id/summary', authMiddleware, async (req, res) => {
+  const { policy_id } = req.params;
+
+  // verify this policy belongs to the requesting user
+  const { data: policy } = await supabase
+    .from('policies')
+    .select('policy_id')
+    .eq('policy_id', policy_id)
+    .eq('user_id', req.user.id)
+    .single();
+
+  if (!policy) return res.status(404).json({ error: 'Policy not found' });
+
+  // fetch summary from policy_summaries table
+  const { data, error } = await supabase
+    .from('policy_summaries')
+    .select('policy_id, summary, created_at')
+    .eq('policy_id', policy_id)
+    .single();
+
+  if (error || !data) return res.status(404).json({ error: 'Summary not yet generated' });
+  res.json(data);
+});
+
+
 export default router;
