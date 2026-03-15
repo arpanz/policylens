@@ -249,5 +249,57 @@ class TestIngestionServiceOverwrite(unittest.TestCase):
         assert result["chunks"] == 2
 
 
+# ====================================================================== #
+#  TEST 7 — ResponseFormatter highlight fields
+# ====================================================================== #
+class TestResponseFormatterHighlightFields(unittest.TestCase):
+
+    def test_sources_contain_page_number_and_highlight_text(self):
+        """Sources must include page_number and highlight_text for PDF highlighting."""
+        formatter = ResponseFormatter()
+        mock_chunk = {
+            "content": "The insured shall pay a deductible of $500.",
+            "metadata": {
+                "section_name": "Deductibles",
+                "clause_type": "deductible",
+                "policy_id": "POL-TEST",
+                "page_number": 5,
+            },
+            "score": 0.90,
+        }
+
+        result = formatter.format_answer("Test answer", "test question", [mock_chunk])
+
+        assert result["sources"][0]["page_number"] == 5
+        assert result["sources"][0]["highlight_text"] == "The insured shall pay a deductible of $500."
+        assert result["sources"][0]["snippet"] is not None
+
+
+# ====================================================================== #
+#  TEST 8 — DocumentCleaner.extract_page_map
+# ====================================================================== #
+class TestCleanerExtractPageMap(unittest.TestCase):
+
+    def test_cleaner_extract_page_map(self):
+        """extract_page_map should parse PAGE_START markers into a char-offset dict."""
+        from rag_engine.ingestion.cleaner import DocumentCleaner
+
+        raw_markdown = (
+            "---PAGE_START:1---\n"
+            "some text on page one\n"
+            "\n"
+            "---PAGE_START:3---\n"
+            "more text on page three\n"
+        )
+
+        cleaner = DocumentCleaner()
+        page_map = cleaner.extract_page_map(raw_markdown)
+
+        assert len(page_map) > 0
+        page_values = set(page_map.values())
+        assert 1 in page_values
+        assert 3 in page_values
+
+
 if __name__ == "__main__":
     unittest.main()
