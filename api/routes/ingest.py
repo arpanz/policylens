@@ -6,7 +6,7 @@ import tempfile
 
 from fastapi import APIRouter, BackgroundTasks, Form, HTTPException, UploadFile
 
-from api.schemas import IngestRequest, IngestResponse
+from api.schemas import IngestRequest, IngestResponse, PolicySummaryResponse
 
 import logging
 
@@ -26,6 +26,10 @@ def _run_ingestion(policy_id: str, pdf_path: str, overwrite: bool) -> None:
     result = service.ingest(pdf_path, policy_id, overwrite=overwrite)
     logger.info("Background ingestion complete: %s", result)
 
+    # Auto-generate summary after successful ingestion
+    if result.get("status") == "success":
+        _auto_generate_summary(policy_id)
+
 
 def _run_ingestion_from_file(policy_id: str, tmp_path: str, overwrite: bool) -> None:
     """Run ingestion from a temp file and always clean up afterwards."""
@@ -35,11 +39,31 @@ def _run_ingestion_from_file(policy_id: str, tmp_path: str, overwrite: bool) -> 
         service = IngestionService()
         result = service.ingest(tmp_path, policy_id, overwrite=overwrite)
         logger.info("File ingestion complete | policy_id=%s | result=%s", policy_id, result)
+
+        # Auto-generate summary after successful ingestion
+        if result.get("status") == "success":
+            _auto_generate_summary(policy_id)
     except Exception as e:
         logger.error("File ingestion failed | policy_id=%s | error=%s", policy_id, e)
     finally:
         if os.path.exists(tmp_path):
             os.unlink(tmp_path)
+
+
+def _auto_generate_summary(policy_id: str) -> None:
+    """Generate and store a policy summary. Failures are logged, not raised."""
+    try:
+        from rag_engine.services.summary_service import SummaryService
+
+        svc = SummaryService()
+        summary = svc.generate(policy_id)
+        if "error" not in summary:
+            svc.store(policy_id, summary)
+            logger.info("Auto-generated summary for policy_id=%s", policy_id)
+        else:
+            logger.warning("Summary generation returned error for policy_id=%s: %s", policy_id, summary)
+    except Exception as e:
+        logger.error("Auto-summary failed for policy_id=%s: %s", policy_id, e)
 
 
 # ------------------------------------------------------------------ #
@@ -125,4 +149,44 @@ async def ingest_upload(
         status="processing",
         policy_id=policy_id,
         message=f"Ingestion started. Poll /ingest/status/{policy_id}",
+    )
+
+
+# ------------------------------------------------------------------ #
+#  POST /ingest/summary/{policy_id}  (on-demand summary generation)
+# ------------------------------------------------------------------ #
+@router.post("/summary/{policy_id}", response_model=PolicySummaryResponse)
+async def generate_summary(policy_id: str):
+    """Generate (or re-generate) a structured policy summary on demand."""
+    from rag_engine.services.summary_service import SummaryService
+
+    svc = SummaryService()
+    summary = svc.generate(policy_id)
+
+    if "error" in summary:
+        raise HTTPException(status_code=404, detail=summary)
+
+    svc.store(policy_id, summary)
+    return PolicySummaryResponse(policy_id=policy_id, summary=summary)
+
+
+# ------------------------------------------------------------------ #
+#  GET /ingest/summary/{policy_id}  (fetch stored summary)
+# ------------------------------------------------------------------ #
+@router.get("/summary/{policy_id}", response_model=PolicySummaryResponse)
+async def get_summary(policy_id: str):
+    """Retrieve a previously generated policy summary."""
+    from rag_engine.services.summary_service import SummaryService
+
+    svc = SummaryService()
+    row = svc.fetch(policy_id)
+
+    if not row:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No summary found for policy_id={policy_id}",
+        )
+
+    return PolicySummaryResponse(
+        policy_id=row["policy_id"], summary=row["summary"]
     )

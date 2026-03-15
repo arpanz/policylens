@@ -44,3 +44,11 @@ class HealthResponse(BaseModel):
     version: str
     supabase_connected: bool
     model: str
+
+
+# ------------------------------------------------------------------ #
+#  Policy Summary
+# ------------------------------------------------------------------ #
+class PolicySummaryResponse(BaseModel):
+    policy_id: str
+    summary: dict
