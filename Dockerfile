@@ -16,8 +16,10 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --timeout 300 --upgrade pip && \
     pip install --no-cache-dir --timeout 300 -r requirements.txt
 
-# Pre-download embedding model at BUILD time so cold starts are instant
-# Model: BAAI/bge-large-en-v1.5 (~1.3GB) — baked into image layer
+# Pre-download embedding model at BUILD time into /app/model_cache
+# This path is inside WORKDIR and persists into the running container
+ENV HF_HOME=/app/model_cache
+ENV SENTENCE_TRANSFORMERS_HOME=/app/model_cache/sentence_transformers
 RUN python -c "from sentence_transformers import SentenceTransformer; print('Downloading model...'); SentenceTransformer('BAAI/bge-large-en-v1.5', device='cpu'); print('Model cached.')"
 
 # Copy entire project
