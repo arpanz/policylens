@@ -10,6 +10,7 @@ import logging
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 import uvicorn
 
 from api.routes.query import router as query_router
@@ -29,8 +30,7 @@ async def lifespan(app: FastAPI):
 
     app.state.query_service = QueryService()
     logger.info("QueryService loaded and ready")
-    yield  # app is running
-    # shutdown cleanup (nothing required for now)
+    yield
 
 
 # ------------------------------------------------------------------ #
@@ -43,7 +43,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS — wide open for development; backend team will restrict in prod
+# CORS — wide open for development
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -52,12 +52,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# ------------------------------------------------------------------ #
+#  Root endpoint — required for HF Space health check
+# ------------------------------------------------------------------ #
+@app.get("/")
+async def root():
+    return JSONResponse({"status": "ok", "message": "PolicyLens RAG API is running"})
+
+
 # ------------------------------------------------------------------ #
 #  Routers
 # ------------------------------------------------------------------ #
 app.include_router(query_router)
 app.include_router(ingest_router)
 app.include_router(health_router)
+
 
 # ------------------------------------------------------------------ #
 #  Dev entry point
