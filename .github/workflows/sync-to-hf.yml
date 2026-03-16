@@ -12,7 +12,8 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v3
         with:
-          fetch-depth: 1
+          fetch-depth: 0
+          lfs: true
 
       - name: Push to HuggingFace Space
         env:
@@ -22,7 +23,4 @@ jobs:
           git config --global user.name "DEVJHAWAR11"
           find . -name "*.zip" -delete
           git remote add hf https://DEVJHAWAR11:${HF_TOKEN}@huggingface.co/spaces/devjhawar/policylens-rag-api
-          git checkout --orphan hf-deploy
-          git add -A
-          git commit -m "sync: deploy to HuggingFace Space"
-          git push hf hf-deploy:main --force
+          git push hf main --force
