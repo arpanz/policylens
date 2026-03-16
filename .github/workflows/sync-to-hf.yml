@@ -15,6 +15,10 @@ jobs:
           fetch-depth: 0
           lfs: true
 
+      - name: Remove binary files before HF push
+        run: |
+          find . -name "*.zip" -exec git rm --cached --ignore-unmatch {} \;
+
       - name: Push to HuggingFace Space
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
