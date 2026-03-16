@@ -2,15 +2,20 @@
 
 import sys
 import io
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
-sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+
+# Force UTF-8 encoding for stdout and stderr on Windows to prevent logging crashes
+if sys.platform == "win32":
+    try:
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+    except Exception:
+        pass # Fallback if buffer is not available
 
 from contextlib import asynccontextmanager
 import logging
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 import uvicorn
 
 from api.routes.query import router as query_router
@@ -30,7 +35,8 @@ async def lifespan(app: FastAPI):
 
     app.state.query_service = QueryService()
     logger.info("QueryService loaded and ready")
-    yield
+    yield  # app is running
+    # shutdown cleanup (nothing required for now)
 
 
 # ------------------------------------------------------------------ #
@@ -43,7 +49,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS — wide open for development
+# CORS — wide open for development; backend team will restrict in prod
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -52,22 +58,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-# ------------------------------------------------------------------ #
-#  Root endpoint — required for HF Space health check
-# ------------------------------------------------------------------ #
-@app.get("/")
-async def root():
-    return JSONResponse({"status": "ok", "message": "PolicyLens RAG API is running"})
-
-
 # ------------------------------------------------------------------ #
 #  Routers
 # ------------------------------------------------------------------ #
 app.include_router(query_router)
 app.include_router(ingest_router)
 app.include_router(health_router)
-
 
 # ------------------------------------------------------------------ #
 #  Dev entry point

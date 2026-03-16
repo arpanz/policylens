@@ -35,9 +35,14 @@ class SupabaseVectorStore(BaseVectorStore):
         for i in range(0, len(rows), _BATCH_SIZE):
             batch = rows[i : i + _BATCH_SIZE]
             batch_num = i // _BATCH_SIZE + 1
-            logger.info("Inserting batch %d/%d (%d rows)", batch_num, total, len(batch))
-            self._client.table(self._table).insert(batch).execute()
-        logger.info("Stored %d chunks", len(chunks))
+            logger.info("Inserting batch %d/%d (%d rows) to Supabase...", batch_num, total, len(batch))
+            try:
+                res = self._client.table(self._table).insert(batch).execute()
+                logger.info("Batch %d stored successfully", batch_num)
+            except Exception as e:
+                logger.error("FAILED to store batch %d: %s", batch_num, str(e))
+                raise e
+        logger.info("Successfully stored %d chunks in Supabase", len(chunks))
 
     # ------------------------------------------------------------------ #
     #  read

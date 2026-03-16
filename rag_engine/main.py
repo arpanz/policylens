@@ -4,7 +4,10 @@ Usage:
     python rag_engine/main.py --dry-run
     python rag_engine/main.py --pdf path/to/policy.pdf --policy-id POL-001
 """
-
+import sys
+import io
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 from __future__ import annotations
 
 import argparse

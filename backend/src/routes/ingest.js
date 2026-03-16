@@ -61,12 +61,27 @@ router.post('/ingest/upload', authMiddleware, upload.single('file'), async (req,
     form.append('policy_id', policy_id);
     form.append('overwrite', 'false');
 
-    // fire and forget — Python runs ingestion in background
-    axios.post(`${process.env.PYTHON_API_URL}/ingest/upload`, form, {
-      headers: form.getHeaders(),
-    }).catch(err => console.error('Python ingest error:', err.message));
+    // Forward to Python — wait for response to surface errors
+    console.log(`[ingest] Forwarding to Python: ${process.env.PYTHON_API_URL}/ingest/upload | policy_id=${policy_id}`);
+    
+    try {
+      const pythonResp = await axios.post(`${process.env.PYTHON_API_URL}/ingest/upload`, form, {
+        headers: form.getHeaders(),
+        maxBodyLength: Infinity,
+        maxContentLength: Infinity,
+      });
+      console.log('[ingest] Python accepted upload:', pythonResp.data);
+    } catch (err) {
+      console.error('[ingest] Python ingest error:', err.message);
+      if (err.response) {
+        console.error('[ingest] Python response status:', err.response.status);
+        console.error('[ingest] Python response body:', JSON.stringify(err.response.data));
+        throw new Error(`Python API Error: ${err.response.status} - ${JSON.stringify(err.response.data)}`);
+      }
+      throw new Error(`Failed to reach Python API: ${err.message}`);
+    }
 
-    // 6. Return immediately
+    // 6. Return response
     res.json({
       status: 'processing',
       policy_id,
@@ -76,6 +91,7 @@ router.post('/ingest/upload', authMiddleware, upload.single('file'), async (req,
     });
 
   } catch (err) {
+    console.error('[ingest] Fatal error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });

@@ -68,8 +68,7 @@ class IngestionService:
         # Step 4 — embed all chunks
         texts = [text for text, _ in chunks]
         metadatas = [
-            meta.__dict__ if hasattr(meta, "__dict__") and not hasattr(meta, "model_dump")
-            else meta.model_dump()
+            meta.to_supabase_dict() if hasattr(meta, "to_supabase_dict") else meta.model_dump()
             for _, meta in chunks
         ]
         logger.info("Embedding %d chunks...", len(texts))
