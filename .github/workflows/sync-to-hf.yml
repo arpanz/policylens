@@ -14,15 +14,28 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install huggingface_hub
+        run: pip install huggingface_hub
+
       - name: Push to HuggingFace Space
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          git config --global user.email "jhawardev11@gmail.com"
-          git config --global user.name "DEVJHAWAR11"
-          find . -name "*.zip" -delete
-          git remote add hf https://DEVJHAWAR11:${HF_TOKEN}@huggingface.co/spaces/devjhawar/policylens-rag-api
-          git checkout --orphan hf-deploy
-          git add -A
-          git commit -m "sync: deploy to HuggingFace Space"
-          git push hf hf-deploy:main --force
+          python - <<'EOF'
+          import os
+          from huggingface_hub import HfApi
+
+          api = HfApi(token=os.environ["HF_TOKEN"])
+          api.upload_folder(
+              folder_path=".",
+              repo_id="devjhawar/policylens-rag-api",
+              repo_type="space",
+              ignore_patterns=[".git/*", ".github/*", "**/__pycache__/*", "*.pyc", ".env", "*.zip"],
+          )
+          print("Sync to HuggingFace Space complete.")
+          EOF

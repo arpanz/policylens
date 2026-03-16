@@ -1,0 +1,49 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;700&family=Space+Grotesk:wght@400;600&display=swap');
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: 'Inter', sans-serif;
+  --font-nav: 'Outfit', sans-serif;
+  --font-footer: 'Space Grotesk', sans-serif;
+  
+  --color-brand-teal: #2A7C76;
+  --color-brand-teal-hover: #236560;
+
+  --animate-float-smooth: floatSmooth 8s ease-in-out infinite;
+  --animate-float-delayed: floatSmooth 8s ease-in-out infinite 4s;
+  --animate-float-fast: floatSmooth 5s ease-in-out infinite 1s;
+  --animate-float-slow: floatSmooth 10s ease-in-out infinite 2s;
+  --animate-twinkle: twinkle 4s ease-in-out infinite alternate;
+
+  @keyframes floatSmooth {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-16px); }
+  }
+  
+  @keyframes twinkle {
+    0% { opacity: 0.2; transform: scale(0.8); }
+    100% { opacity: 0.8; transform: scale(1.2); }
+  }
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  /* Light mode stays exactly as it was */
+  background-color: #FAFAFA;
+  color: #111827;
+  transition: background-color 0.6s ease, color 0.6s ease;
+}
+
+/* 
+  DARK MODE BASE
+  A very deep, rich black-brown/espresso base.
+*/
+.dark body {
+  background-color: #0c0908; 
+  color: #f8fafc;
+}
