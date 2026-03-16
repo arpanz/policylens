@@ -20,7 +20,7 @@ RUN pip install --no-cache-dir --timeout 300 --upgrade pip && \
 # This path is inside WORKDIR and persists into the running container
 ENV HF_HOME=/app/model_cache
 ENV SENTENCE_TRANSFORMERS_HOME=/app/model_cache/sentence_transformers
-RUN python -c "from sentence_transformers import SentenceTransformer; print('Downloading model...'); SentenceTransformer('BAAI/bge-large-en-v1.5', device='cpu'); print('Model cached.')"
+RUN python -c "from sentence_transformers import SentenceTransformer; print('Downloading model...'); SentenceTransformer('BAAI/bge-base-en-v1.5', device='cpu'); print('Model cached.')"
 
 # Copy entire project
 COPY . .
