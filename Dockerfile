@@ -18,13 +18,7 @@ RUN pip install --no-cache-dir --timeout 300 --upgrade pip && \
 
 # Pre-download embedding model at BUILD time so cold starts are instant
 # Model: BAAI/bge-large-en-v1.5 (~1.3GB) — baked into image layer
-RUN python -c "
-from sentence_transformers import SentenceTransformer
-import os
-print('Downloading BAAI/bge-large-en-v1.5 into image...')
-model = SentenceTransformer('BAAI/bge-large-en-v1.5', device='cpu')
-print('Model downloaded and cached.')
-"
+RUN python -c "from sentence_transformers import SentenceTransformer; print('Downloading model...'); SentenceTransformer('BAAI/bge-large-en-v1.5', device='cpu'); print('Model cached.')"
 
 # Copy entire project
 COPY . .
@@ -35,8 +29,7 @@ RUN mkdir -p /tmp/policydecoder_uploads
 # Expose port
 EXPOSE 7860
 
-# Health check — use root endpoint (fast, no DB call)
-# start-period=30s is enough since model is pre-baked — no download needed
+# Health check — start-period=30s since model is pre-baked, no download needed
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD curl -f http://localhost:7860/ || exit 1
 
