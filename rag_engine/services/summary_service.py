@@ -35,7 +35,7 @@ _SUMMARY_SYSTEM_PROMPT = """You are an insurance policy analyst. Given raw polic
   "important_conditions": ["list of 3-5 important conditions/clauses"]
 }
 
-Return ONLY valid JSON. No explanation. No markdown. Just the JSON object."""
+Return ONLY valid JSON. No explanation. No markdown. Just the JSON object. Ensure the JSON is complete and properly closed."""
 
 _SUMMARY_TABLE = "policy_summaries"
 
@@ -54,7 +54,8 @@ class SummaryService:
         self._store = get_vector_store()
         self._retriever = PolicyRetriever(self._store, self._embedder)
         self._context_builder = ContextBuilder()
-        self._llm = get_llm()
+        # Use higher max_tokens for summary to prevent JSON truncation
+        self._llm = get_llm(max_tokens=8192)
         self._supabase = create_client(
             settings.supabase_url, settings.supabase_service_key
         )
@@ -72,9 +73,9 @@ class SummaryService:
         from rag_engine.utils.status_tracker import status_tracker
         status_tracker.update_status(policy_id, "processing", 96, "Generating AI Summary...")
 
-        # Step 1 — retrieve top 15 chunks using a fixed internal query
+        # Step 1 — retrieve top 10 chunks (reduced from 15 to keep context smaller)
         raw_results = self._retriever.retrieve(
-            _INTERNAL_QUERY, policy_id, k=15
+            _INTERNAL_QUERY, policy_id, k=10
         )
 
         if not raw_results:
@@ -84,14 +85,14 @@ class SummaryService:
             )
             return {"error": "no_chunks", "policy_id": policy_id}
 
-        # Step 2 — build context from retrieved chunks
-        context = self._context_builder.build(raw_results, max_tokens=4000)
+        # Step 2 — build context (reduced to 2000 tokens to leave room for JSON output)
+        context = self._context_builder.build(raw_results, max_tokens=2000)
 
         # Step 3 — send to LLM with structured extraction prompt
         user_prompt = (
             f"Here are the policy document chunks for policy {policy_id}:\n\n"
             f"{context}\n\n"
-            "Extract the structured summary as specified."
+            "Extract the structured summary as specified. Return complete valid JSON only."
         )
         raw_response = self._llm.complete(
             user_prompt, system=_SUMMARY_SYSTEM_PROMPT
@@ -147,9 +148,9 @@ class SummaryService:
         if text.startswith("```"):
             text = text.split("\n", 1)[1] if "\n" in text else text[3:]
             if text.endswith("```"):
-                text = text[: -3].strip()
+                text = text[:-3].strip()
         try:
             return json.loads(text)
         except json.JSONDecodeError as exc:
-            logger.error("Failed to parse LLM JSON: %s", exc)
+            logger.error("Failed to parse LLM JSON: %s | raw length: %d", exc, len(raw))
             return {"raw_response": raw, "parse_error": str(exc)}
