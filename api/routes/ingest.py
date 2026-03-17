@@ -3,6 +3,7 @@
 import os
 import shutil
 import tempfile
+import threading
 
 from fastapi import APIRouter, BackgroundTasks, Form, HTTPException, UploadFile
 
@@ -16,6 +17,29 @@ router = APIRouter(prefix="/ingest", tags=["ingest"])
 
 
 # ------------------------------------------------------------------ #
+#  Summary — runs in its own thread, completely non-blocking
+# ------------------------------------------------------------------ #
+def _generate_summary_async(policy_id: str) -> None:
+    """Generate and store summary in a separate thread.
+    
+    Runs AFTER status is already 'ready' so the dashboard loads instantly.
+    Summary appears in the dashboard once this completes (~40s).
+    """
+    try:
+        from rag_engine.services.summary_service import SummaryService
+        logger.info("[Summary Thread] Starting for policy_id=%s", policy_id)
+        svc = SummaryService()
+        summary = svc.generate(policy_id)
+        if "error" not in summary and "parse_error" not in summary:
+            svc.store(policy_id, summary)
+            logger.info("[Summary Thread] Done for policy_id=%s", policy_id)
+        else:
+            logger.warning("[Summary Thread] Generation returned error for policy_id=%s: %s", policy_id, summary)
+    except Exception as e:
+        logger.error("[Summary Thread] Failed for policy_id=%s: %s", policy_id, e)
+
+
+# ------------------------------------------------------------------ #
 #  Background workers
 # ------------------------------------------------------------------ #
 def _run_ingestion(policy_id: str, pdf_path: str, overwrite: bool) -> None:
@@ -26,9 +50,10 @@ def _run_ingestion(policy_id: str, pdf_path: str, overwrite: bool) -> None:
     result = service.ingest(pdf_path, policy_id, overwrite=overwrite)
     logger.info("Background ingestion complete: %s", result)
 
-    # Auto-generate summary after successful ingestion
-    if result.get("status") == "success":
-        _auto_generate_summary(policy_id)
+    # Fire summary in its own thread — status is already 'ready' at this point
+    if result.get("status") in ("success", "skipped"):
+        t = threading.Thread(target=_generate_summary_async, args=(policy_id,), daemon=True)
+        t.start()
 
 
 def _run_ingestion_from_file(policy_id: str, tmp_path: str, overwrite: bool) -> None:
@@ -40,9 +65,11 @@ def _run_ingestion_from_file(policy_id: str, tmp_path: str, overwrite: bool) -> 
         result = service.ingest(tmp_path, policy_id, overwrite=overwrite)
         logger.info("File ingestion complete | policy_id=%s | result=%s", policy_id, result)
 
-        # Auto-generate summary after successful ingestion
-        if result.get("status") == "success":
-            _auto_generate_summary(policy_id)
+        # Fire summary in its own thread — status is already 'ready' at this point
+        if result.get("status") in ("success", "skipped"):
+            t = threading.Thread(target=_generate_summary_async, args=(policy_id,), daemon=True)
+            t.start()
+
     except Exception as e:
         logger.error("File ingestion failed | policy_id=%s | error=%s", policy_id, e)
         import traceback
@@ -50,22 +77,6 @@ def _run_ingestion_from_file(policy_id: str, tmp_path: str, overwrite: bool) -> 
     finally:
         if os.path.exists(tmp_path):
             os.unlink(tmp_path)
-
-
-def _auto_generate_summary(policy_id: str) -> None:
-    """Generate and store a policy summary. Failures are logged, not raised."""
-    try:
-        from rag_engine.services.summary_service import SummaryService
-
-        svc = SummaryService()
-        summary = svc.generate(policy_id)
-        if "error" not in summary:
-            svc.store(policy_id, summary)
-            logger.info("Auto-generated summary for policy_id=%s", policy_id)
-        else:
-            logger.warning("Summary generation returned error for policy_id=%s: %s", policy_id, summary)
-    except Exception as e:
-        logger.error("Auto-summary failed for policy_id=%s: %s", policy_id, e)
 
 
 # ------------------------------------------------------------------ #
@@ -116,7 +127,6 @@ async def ingest_status(policy_id: str):
     }
     
     if tracked:
-        # Merge tracked info, but let 'exists' override if it's already in store
         response.update(tracked)
         if exists:
             response["status"] = "ready"
@@ -140,17 +150,14 @@ async def ingest_upload(
 ):
     print(f"[DEBUG] Received ingest/upload request for policy_id: {policy_id}")
     """Upload a PDF file and ingest it in the background."""
-    # a) Validate file type
     if not file.filename or not file.filename.endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files accepted")
 
-    # b) Save to temp directory
     suffix = f"_{file.filename}"
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
         shutil.copyfileobj(file.file, tmp)
         tmp_path = tmp.name
 
-    # c) Check if policy already ingested
     from rag_engine.vector_store.store_factory import get_vector_store
 
     store = get_vector_store()
@@ -162,7 +169,6 @@ async def ingest_upload(
             message="Policy already ingested. Pass overwrite=true to re-ingest.",
         )
 
-    # d) Run ingestion in background
     background_tasks.add_task(_run_ingestion_from_file, policy_id, tmp_path, overwrite)
 
     return IngestResponse(
@@ -204,7 +210,7 @@ async def get_summary(policy_id: str):
     if not row:
         raise HTTPException(
             status_code=404,
-            detail=f"No summary found for policy_id={policy_id}",
+            detail=f"No summary found for policy_id={policy_id}. It may still be generating — try again in 30s.",
         )
 
     return PolicySummaryResponse(

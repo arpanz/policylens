@@ -67,7 +67,7 @@ class IngestionService:
             status_tracker.update_status(policy_id, "processing", 10, "Cleared existing data")
 
         # Step 3 — parse + chunk
-        status_tracker.update_status(policy_id, "processing", 15, "Parsing PDF (LlamaParse)...")
+        status_tracker.update_status(policy_id, "processing", 15, "Parsing PDF...")
         chunks = self._pipeline.run(pdf_path, policy_id)
         logger.info("Pipeline produced %d chunks", len(chunks))
         status_tracker.update_status(policy_id, "processing", 60, f"Parsed {len(chunks)} chunks")
@@ -94,8 +94,10 @@ class IngestionService:
             policy_id,
             len(chunks),
         )
-        # Note: We don't set 'ready' here yet because _run_ingestion in ingest.py will trigger summary
-        status_tracker.update_status(policy_id, "processing", 95, "Ingestion complete. Starting summary...")
+
+        # ✅ Set ready IMMEDIATELY after chunks stored — don't wait for summary
+        status_tracker.update_status(policy_id, "ready", 100, "Ready")
+
         return {
             "status": "success",
             "policy_id": policy_id,
