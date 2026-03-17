@@ -43,7 +43,6 @@ class PDFLoader:
             num_workers=4,
             verbose=settings.debug,
             parsing_instruction=_PARSING_INSTRUCTION,
-            fast_mode=True
         )
 
     @with_retry(max_retries=3, delay=2.0, backoff=2.0)
