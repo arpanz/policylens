@@ -496,23 +496,7 @@ function SignupModal({ dark, T, onClose, onSuccess }) {
 
             <form onSubmit={handleSubmit} style={{ display:'flex', flexDirection:'column', gap:14 }}>
 
-              {/* NAME */}
-              <div>
-                <label style={{ ...mono, display:'block', fontSize:10, fontWeight:500,
-                  letterSpacing:'1.5px', marginBottom:6, color:T.labelColor }}>
-                  FULL NAME
-                </label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                  placeholder="Ada Lovelace"
-                  autoComplete="name"
-                  style={{ ...base, padding:'11px 14px' }}
-                  onFocus={e => e.target.style.borderColor = T.inputFocus}
-                  onBlur ={e => e.target.style.borderColor = T.inputBorder}
-                />
-              </div>
+              
 
               {/* EMAIL */}
               <div>
