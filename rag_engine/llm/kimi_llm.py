@@ -54,6 +54,7 @@ class KimiLLM(BaseLLM):
             messages=messages,
             temperature=self._temperature,
             max_tokens=self._max_tokens,
+            stream=False,
         )
         result = response.choices[0].message.content
         logger.info(
@@ -62,6 +63,28 @@ class KimiLLM(BaseLLM):
             len(result) if result else 0,
         )
         return result or ""
+
+    # ------------------------------------------------------------------ #
+    #  streaming
+    # ------------------------------------------------------------------ #
+    def stream(self, prompt: str, system: str | None = None):
+        messages: list[dict] = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": prompt})
+        return self.stream_with_messages(messages)
+
+    def stream_with_messages(self, messages: list[dict]):
+        response_stream = self._client.chat.completions.create(
+            model=self._model,
+            messages=messages,
+            temperature=self._temperature,
+            max_tokens=self._max_tokens,
+            stream=True,
+        )
+        for chunk in response_stream:
+            if chunk.choices and len(chunk.choices) > 0 and chunk.choices[0].delta.content:
+                yield chunk.choices[0].delta.content
 
     # ------------------------------------------------------------------ #
     #  model_id

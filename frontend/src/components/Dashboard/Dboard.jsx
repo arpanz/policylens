@@ -76,40 +76,9 @@ const DARK = {
   divider:'#1a1310',
 };
 
-const SAMPLE_HISTORY = [
-  {
-    id:1, filename:'HDFC_Life_ClickProtect.pdf', date:'Mar 15, 2026',
-    policy_type:'Term Life', insurer:'HDFC Life',
-    analysis:{
-      policy_name:'HDFC Life Click 2 Protect Super',
-      policy_type:'Term Life', insurer:'HDFC Life Insurance Co. Ltd.', uin:'101N145V02',
-      key_benefits:[
-        'Life cover up to age 85','Critical illness benefit rider',
-        'Premium waiver on disability','Return of premium option',
-        'Increasing cover option','Accidental death benefit',
-      ],
-      exclusions:[
-        'Suicide within 12 months of issuance','Pre-existing conditions (first 2 years)',
-        'Hazardous activities or adventure sports','War, riot or civil commotion',
-        'Self-inflicted injuries','Substance or alcohol abuse',
-      ],
-      death_benefit:'Sum assured paid as lump sum or monthly income to nominee. Minimum sum assured is ₹50 Lakhs.',
-      survival_benefit:'No survival benefit under base plan. Return of Premium variant returns total premiums paid on maturity.',
-      surrender_value:'Policy acquires surrender value after 3 consecutive premium years. Value depends on premiums paid and remaining term.',
-      loan_facility:null,
-      free_look_period:'30 days',
-      tax_benefit:'Premiums qualify for deduction under Section 80C up to ₹1.5L. Death benefit is fully tax-free under Section 10(10D).',
-      important_conditions:[
-        'Medical examination mandatory for sum assured above ₹1 Crore',
-        'Grace period of 30 days for annual/semi-annual mode',
-        'Policy lapses if premium unpaid beyond grace period',
-        'Revival allowed within 5 years of lapse with applicable interest',
-      ],
-    },
-  },
-  { id:2, filename:'LIC_JeevanAnand.pdf', date:'Mar 12, 2026', policy_type:'Endowment', insurer:'LIC of India', analysis:null },
-  { id:3, filename:'StarHealth_Comprehensive.pdf', date:'Mar 10, 2026', policy_type:'Health', insurer:'Star Health', analysis:null },
-];
+import { fetchApi, streamApi } from '../../api';
+
+const SAMPLE_HISTORY = [];
 
 export default function Dboard({ file, isDark: initDark = true }) {
   const [dark,           setDark]           = useState(initDark);
@@ -153,32 +122,78 @@ export default function Dboard({ file, isDark: initDark = true }) {
     chatEnd.current?.scrollIntoView({ behavior:'smooth' });
   }, [chatMessages, isTyping]);
 
+  const loadHistory = async () => {
+    try {
+      const data = await fetchApi('/policies');
+      const formatted = data.map(item => ({
+        id: item.policy_id,
+        filename: item.filename,
+        date: new Date(item.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
+        policy_type: 'Detected',
+        insurer: 'PolicyLens AI',
+        analysis: null
+      }));
+      setHistory(formatted);
+    } catch (err) {
+      console.error('Failed to load history:', err);
+    }
+  };
+
   useEffect(() => {
+    loadHistory();
     if (file) processFile(file);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const processFile = useCallback((f) => {
-    setUploading(true); setUploadPct(0);
-    const iv = setInterval(() => {
-      setUploadPct(p => {
-        if (p >= 100) {
-          clearInterval(iv);
-          setUploading(false);
-          setActiveAnalysis(SAMPLE_HISTORY[0].analysis);
-          setHistory(prev => [{
-            id: Date.now(),
-            filename: f.name,
-            date: new Date().toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' }),
-            policy_type:'Term Life', insurer:'Detected',
-            analysis: SAMPLE_HISTORY[0].analysis,
-          }, ...prev]);
-          setActiveTab('home');
-          return 100;
-        }
-        return p + 4;
+  const fetchSummary = async (policy_id) => {
+    try {
+      const data = await fetchApi(`/policies/${policy_id}/summary`);
+      if (data && data.summary) {
+        setActiveAnalysis(data.summary);
+        setActiveTab('home');
+        setHistory(h => h.map(x => x.id === policy_id ? { ...x, analysis: data.summary } : x));
+      }
+    } catch (err) {
+      console.error("No summary found", err);
+      alert("Summary not yet generated or failed to load");
+    }
+  };
+
+  const processFile = useCallback(async (f) => {
+    setUploading(true); setUploadPct(5);
+    try {
+      const fd = new FormData();
+      fd.append('file', f);
+      const data = await fetchApi('/ingest/upload', {
+        method: 'POST',
+        body: fd
       });
-    }, 80);
+      const pid = data.policy_id;
+      setUploadPct(20);
+      
+      const poll = setInterval(async () => {
+         try {
+           const sData = await fetchApi(`/ingest/status/${pid}`);
+           if (sData.progress !== undefined) {
+             setUploadPct(sData.progress);
+           }
+           if (sData.status === 'ready') {
+              clearInterval(poll);
+              setUploadPct(100);
+              setTimeout(() => {
+                setUploading(false);
+                loadHistory(); // refresh history
+                fetchSummary(pid);
+              }, 800);
+           }
+         } catch(e) {
+           console.error('[POLL ERROR]', e);
+         }
+      }, 2000);
+    } catch (err) {
+      setUploading(false);
+      alert('Upload failed: ' + err.message);
+    }
   }, []);
 
   const handleDrop = useCallback((e) => {
@@ -187,18 +202,37 @@ export default function Dboard({ file, isDark: initDark = true }) {
     if (picked) processFile(picked);
   }, [processFile]);
 
-  const sendChat = () => {
+  const sendChat = async () => {
     if (!chatInput.trim() || isTyping) return;
     const text = chatInput;
     setChatMessages(p => [...p, { id:Date.now(), sender:'user', text }]);
-    setChatInput(''); setIsTyping(true);
-    setTimeout(() => {
-      setChatMessages(p => [...p, {
-        id:Date.now()+1, sender:'ai',
-        text:'Analyzing clause context… Connect the backend model to retrieve clause-specific analysis from your document.',
-      }]);
+    setChatInput(''); 
+    setIsTyping(true);
+    
+    let pid = activeAnalysis ? activeAnalysis.policy_id : (history.length > 0 ? history[0].id : null);
+
+    try {
+      if (!pid) {
+        throw new Error('Please upload and analyze a policy first.');
+      }
+
+      const aiMsgId = Date.now() + 1;
+      setChatMessages(p => [...p, { id: aiMsgId, sender: 'ai', text: '' }]);
+
+      await streamApi('/query/stream', {
+        method: 'POST',
+        body: { question: text, policy_id: pid }
+      }, (token) => {
+        setChatMessages(prev => prev.map(m => 
+          m.id === aiMsgId ? { ...m, text: m.text + token } : m
+        ));
+      });
+
+    } catch (err) {
+      setChatMessages(p => [...p, { id: Date.now() + 2, sender: 'ai', text: err.message || "Failed to get response." }]);
+    } finally {
       setIsTyping(false);
-    }, 1600);
+    }
   };
 
   // ── Sub-components ────────────────────────────────────────────────────────
@@ -438,14 +472,15 @@ export default function Dboard({ file, isDark: initDark = true }) {
             </div>
           </div>
           <div style={{ display:'flex', gap:8 }}>
-            {item.analysis && (
               <button
-                onClick={() => { setActiveAnalysis(item.analysis); setActiveTab('home'); }}
+                onClick={() => { 
+                  if (item.analysis) { setActiveAnalysis(item.analysis); setActiveTab('home'); } 
+                  else { fetchSummary(item.id); } 
+                }}
                 style={{ display:'flex', alignItems:'center', gap:6, padding:'7px 14px', borderRadius:10, cursor:'pointer', border:`1px solid ${T.navActiveBrd}`, background:T.navActiveBg, color:T.navActiveClr, ...f, fontSize:12, fontWeight:500, transition:'all .2s' }}
               >
                 <Eye size={13} /> View
               </button>
-            )}
             <button
               onClick={() => setHistory(h => h.filter(x => x.id !== item.id))}
               style={{ width:34, height:34, borderRadius:10, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', background:'transparent', border:`1px solid ${T.cardBorder}`, color:T.t3, transition:'all .2s' }}
@@ -510,7 +545,10 @@ export default function Dboard({ file, isDark: initDark = true }) {
               {history.map(item => (
                 <button
                   key={item.id}
-                  onClick={() => { if (item.analysis) { setActiveAnalysis(item.analysis); setActiveTab('home'); } }}
+                  onClick={() => { 
+                    if (item.analysis) { setActiveAnalysis(item.analysis); setActiveTab('home'); } 
+                    else { fetchSummary(item.id); } 
+                  }}
                   style={{ display:'flex', alignItems:'flex-start', gap:10, padding:'10px 12px', borderRadius:10, cursor:'pointer', background:'transparent', border:'1px solid transparent', textAlign:'left', transition:'all .2s', width:'100%' }}
                   onMouseEnter={e => e.currentTarget.style.background = T.navHoverBg}
                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}

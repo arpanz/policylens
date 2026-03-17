@@ -41,6 +41,9 @@ class IngestionService:
             "IngestionService.ingest START | policy_id=%s", policy_id
         )
 
+        from rag_engine.utils.status_tracker import status_tracker
+        status_tracker.update_status(policy_id, "processing", 5, "Initializing ingestion...")
+
         # Step 1 — check if already exists
         if self._store.policy_exists(policy_id) and not overwrite:
             count = self._store.get_policy_chunk_count(policy_id)
@@ -49,6 +52,7 @@ class IngestionService:
                 policy_id,
                 count,
             )
+            status_tracker.update_status(policy_id, "ready", 100, "Already ingested")
             return {
                 "status": "skipped",
                 "policy_id": policy_id,
@@ -60,10 +64,13 @@ class IngestionService:
         if overwrite and self._store.policy_exists(policy_id):
             self._store.delete_policy(policy_id)
             logger.info("Deleted existing chunks for %s", policy_id)
+            status_tracker.update_status(policy_id, "processing", 10, "Cleared existing data")
 
         # Step 3 — parse + chunk
+        status_tracker.update_status(policy_id, "processing", 15, "Parsing PDF (LlamaParse)...")
         chunks = self._pipeline.run(pdf_path, policy_id)
         logger.info("Pipeline produced %d chunks", len(chunks))
+        status_tracker.update_status(policy_id, "processing", 60, f"Parsed {len(chunks)} chunks")
 
         # Step 4 — embed all chunks
         texts = [text for text, _ in chunks]
@@ -72,10 +79,13 @@ class IngestionService:
             for _, meta in chunks
         ]
         logger.info("Embedding %d chunks...", len(texts))
+        status_tracker.update_status(policy_id, "processing", 65, "Generating embeddings...")
         embeddings = self._embedder.embed_documents(texts)
         logger.info("Embedding complete")
+        status_tracker.update_status(policy_id, "processing", 85, "Embeddings generated")
 
         # Step 5 — store in Supabase
+        status_tracker.update_status(policy_id, "processing", 90, "Storing chunks in Supabase...")
         store_tuples = list(zip(texts, embeddings, metadatas))
         self._store.add_chunks(store_tuples)
 
@@ -84,6 +94,8 @@ class IngestionService:
             policy_id,
             len(chunks),
         )
+        # Note: We don't set 'ready' here yet because _run_ingestion in ingest.py will trigger summary
+        status_tracker.update_status(policy_id, "processing", 95, "Ingestion complete. Starting summary...")
         return {
             "status": "success",
             "policy_id": policy_id,

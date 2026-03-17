@@ -69,6 +69,8 @@ class SummaryService:
         Returns the parsed summary dict.
         """
         logger.info("SummaryService.generate START | policy_id=%s", policy_id)
+        from rag_engine.utils.status_tracker import status_tracker
+        status_tracker.update_status(policy_id, "processing", 96, "Generating AI Summary...")
 
         # Step 1 — retrieve top 15 chunks using a fixed internal query
         raw_results = self._retriever.retrieve(
@@ -103,6 +105,7 @@ class SummaryService:
             policy_id,
             list(summary.keys()) if isinstance(summary, dict) else "parse_error",
         )
+        status_tracker.update_status(policy_id, "processing", 99, "Summary generated")
         return summary
 
     # ------------------------------------------------------------------ #
@@ -115,6 +118,8 @@ class SummaryService:
             on_conflict="policy_id",
         ).execute()
         logger.info("Stored summary for policy_id=%s", policy_id)
+        from rag_engine.utils.status_tracker import status_tracker
+        status_tracker.update_status(policy_id, "ready", 100, "Analysis complete")
 
     # ------------------------------------------------------------------ #
     #  fetch
