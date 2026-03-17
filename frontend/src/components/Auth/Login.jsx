@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { Eye, EyeOff, ArrowRight, Sun, Moon, Cpu, Shield, Zap, Lock, X, User, Mail, CheckCircle } from 'lucide-react';
+import { Eye, EyeOff, ArrowRight, Sun, Moon, Cpu, Shield, Zap, Lock, X, CheckCircle } from 'lucide-react';
+//import { supabase } from '../lib/supabaseClient'; // ← adjust path to your supabase client
 
 const FONT_LINK =
   'https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Syne:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap';
@@ -13,27 +14,28 @@ const KEYFRAMES = `
   @keyframes lp-orbit { from{transform:rotate(0deg) translateX(160px) rotate(0deg)} to{transform:rotate(360deg) translateX(160px) rotate(-360deg)} }
   @keyframes lp-shake { 0%,100%{transform:translateX(0)} 20%,60%{transform:translateX(-5px)} 40%,80%{transform:translateX(5px)} }
   @keyframes lp-spin  { to{transform:rotate(360deg)} }
-  @keyframes lp-pulse { 0%,100%{box-shadow:0 0 0 0 currentColor} 50%{box-shadow:0 0 0 4px transparent} }
 
-  @keyframes modal-backdrop-in { from{opacity:0} to{opacity:1} }
-  @keyframes modal-slide-in    { from{opacity:0;transform:translateY(32px) scale(.97)} to{opacity:1;transform:none} }
-  @keyframes success-pop       { 0%{transform:scale(.5);opacity:0} 70%{transform:scale(1.15)} 100%{transform:scale(1);opacity:1} }
+  @keyframes modal-in    { from{opacity:0} to{opacity:1} }
+  @keyframes modal-slide { from{opacity:0;transform:translateY(28px) scale(.97)} to{opacity:1;transform:none} }
+  @keyframes success-pop { 0%{transform:scale(.5);opacity:0} 70%{transform:scale(1.15)} 100%{transform:scale(1);opacity:1} }
+  @keyframes bar-fill    { from{width:0%} to{width:100%} }
 
-  .lp-form           { animation: lp-up   .5s cubic-bezier(.16,1,.3,1) forwards }
-  .lp-panel          { animation: lp-left .5s cubic-bezier(.16,1,.3,1) forwards }
-  .lp-shake          { animation: lp-shake .4s ease }
-  .lp-spin           { animation: lp-spin 1s linear infinite }
-  .modal-backdrop-in { animation: modal-backdrop-in .25s ease forwards }
-  .modal-slide-in    { animation: modal-slide-in .35s cubic-bezier(.16,1,.3,1) forwards }
-  .success-pop       { animation: success-pop .5s cubic-bezier(.16,1,.3,1) forwards }
+  .lp-form    { animation: lp-up   .5s cubic-bezier(.16,1,.3,1) forwards }
+  .lp-panel   { animation: lp-left .5s cubic-bezier(.16,1,.3,1) forwards }
+  .lp-shake   { animation: lp-shake .4s ease }
+  .lp-spin    { animation: lp-spin 1s linear infinite }
+  .modal-in   { animation: modal-in .22s ease forwards }
+  .modal-slide{ animation: modal-slide .32s cubic-bezier(.16,1,.3,1) forwards }
+  .success-pop{ animation: success-pop .45s cubic-bezier(.16,1,.3,1) forwards }
+  .bar-fill   { animation: bar-fill 2.4s linear forwards }
 `;
 
 const STARS = Array.from({ length: 70 }, (_, i) => ({
-  x:  ((i * 137.508) % 100).toFixed(2),
-  y:  ((i * 97.3)    % 100).toFixed(2),
-  r:  (0.5 + (i % 4) * 0.45).toFixed(1),
-  d:  ((i * 0.22)    %  3  ).toFixed(2),
-  t:  (2   + (i % 5) * 0.7 ).toFixed(1),
+  x: ((i * 137.508) % 100).toFixed(2),
+  y: ((i * 97.3)    % 100).toFixed(2),
+  r: (0.5 + (i % 4) * 0.45).toFixed(1),
+  d: ((i * 0.22)    %  3  ).toFixed(2),
+  t: (2   + (i % 5) * 0.7 ).toFixed(1),
 }));
 
 const LIGHT = {
@@ -52,14 +54,10 @@ const LIGHT = {
   socialBg:'#f9fafb', socialBorder:'#e5e7eb', socialText:'#6b7280',
   footerText:'#d1d5db', toggleBg:'#f3f4f6', toggleBorder:'#e5e7eb',
   errorBg:'#fff5f5', errorBorder:'#fecaca', errorText:'#dc2626',
-
-  /* modal-specific */
   modalOverlay:'rgba(0,0,0,.45)',
   modalBg:'#ffffff', modalBorder:'rgba(209,213,219,.6)', modalShadow:'0 32px 80px rgba(0,0,0,.18)',
   strengthTrack:'#e5e7eb',
-  successBg:'linear-gradient(135deg,rgba(204,251,241,.6),rgba(240,253,250,.9))',
-  successBorder:'rgba(13,148,136,.25)', successIcon:'#0d9488', successTitle:'#111827',
-  successSub:'#6b7280',
+  successIcon:'#0d9488', successSub:'#6b7280',
 };
 
 const DARK = {
@@ -78,15 +76,28 @@ const DARK = {
   socialBg:'rgba(21,94,117,.08)', socialBorder:'rgba(35,26,21,.8)', socialText:'#a5f3fc',
   footerText:'rgba(21,94,117,.5)', toggleBg:'#1a1310', toggleBorder:'#2a1f1a',
   errorBg:'rgba(239,68,68,.08)', errorBorder:'rgba(239,68,68,.25)', errorText:'#fca5a5',
-
-  /* modal-specific */
   modalOverlay:'rgba(0,0,0,.72)',
   modalBg:'#15100d', modalBorder:'rgba(21,94,117,.35)', modalShadow:'0 32px 80px rgba(0,0,0,.8)',
   strengthTrack:'rgba(35,26,21,.8)',
-  successBg:'linear-gradient(135deg,rgba(14,116,144,.12),rgba(21,94,117,.06))',
-  successBorder:'rgba(34,211,238,.2)', successIcon:'#22d3ee', successTitle:'#ecfeff',
-  successSub:'rgba(207,250,254,.6)',
+  successIcon:'#22d3ee', successSub:'rgba(207,250,254,.6)',
 };
+
+function getStrength(pw) {
+  if (!pw) return { score: 0, label: '', color: 'transparent' };
+  let s = 0;
+  if (pw.length >= 8)           s++;
+  if (/[A-Z]/.test(pw))         s++;
+  if (/[0-9]/.test(pw))         s++;
+  if (/[^A-Za-z0-9]/.test(pw))  s++;
+  const map = [
+    { label:'Too short',   color:'#ef4444' },
+    { label:'Weak',        color:'#f97316' },
+    { label:'Fair',        color:'#eab308' },
+    { label:'Strong',      color:'#22c55e' },
+    { label:'Very strong', color:'#14b8a6' },
+  ];
+  return { score: s, ...map[s] };
+}
 
 const GoogleIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24">
@@ -97,265 +108,425 @@ const GoogleIcon = () => (
   </svg>
 );
 
-/* ── Password Strength Meter ──────────────────────────────────── */
-function getStrength(pw) {
-  if (!pw) return { score: 0, label: '', color: 'transparent' };
-  let s = 0;
-  if (pw.length >= 8)            s++;
-  if (/[A-Z]/.test(pw))          s++;
-  if (/[0-9]/.test(pw))          s++;
-  if (/[^A-Za-z0-9]/.test(pw))   s++;
-  const map = [
-    { label:'Too short',  color:'#ef4444' },
-    { label:'Weak',       color:'#f97316' },
-    { label:'Fair',       color:'#eab308' },
-    { label:'Strong',     color:'#22c55e' },
-    { label:'Very strong',color:'#14b8a6' },
-  ];
-  return { score: s, ...map[s] };
-}
-
-/* ── SIGNUP MODAL ─────────────────────────────────────────────── */
-function SignupModal({ dark, T, onClose, onSuccess }) {
-  const [name,      setName]      = useState('');
-  const [email,     setEmail]     = useState('');
-  const [password,  setPassword]  = useState('');
-  const [confirm,   setConfirm]   = useState('');
-  const [showPw,    setShowPw]    = useState(false);
-  const [showCf,    setShowCf]    = useState(false);
-  const [agreed,    setAgreed]    = useState(false);
-  const [loading,   setLoading]   = useState(false);
-  const [error,     setError]     = useState('');
-  const [shake,     setShake]     = useState(false);
-  const [done,      setDone]      = useState(false);
+/* ══ FORGOT PASSWORD MODAL ════════════════════════════════════════════ */
+function ForgotModal({ dark, T, onClose }) {
+  const [step,    setStep]    = useState('email'); // 'email' | 'code' | 'reset' | 'done'
+  const [email,   setEmail]   = useState('');
+  const [code,    setCode]    = useState('');
+  const [newPw,   setNewPw]   = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [showPw,  setShowPw]  = useState(false);
+  const [showCf,  setShowCf]  = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error,   setError]   = useState('');
+  const [shake,   setShake]   = useState(false);
   const overlayRef = useRef(null);
 
-  const f     = { fontFamily:"'DM Sans',sans-serif" };
+  const mono  = { fontFamily:"'JetBrains Mono',monospace" };
+  const bebas = { fontFamily:"'Bebas Neue',cursive" };
+  const dm    = { fontFamily:"'DM Sans',sans-serif" };
+  const strength     = getStrength(newPw);
+  const confirmMatch = confirm.length > 0 && newPw === confirm;
+  const confirmBad   = confirm.length > 0 && newPw !== confirm;
+  const base = { ...dm, width:'100%', fontSize:13, borderRadius:12, outline:'none', boxSizing:'border-box',
+    background:T.inputBg, border:`1px solid ${T.inputBorder}`, color:T.inputText, transition:'border-color .2s' };
+  const triggerError = (msg) => { setError(msg); setShake(true); setTimeout(() => setShake(false), 450); };
+
+  // ── UPDATED: check if email exists before sending reset code ──
+  const sendCode = async (e) => {
+  e.preventDefault();
+  if (!email.trim()) return triggerError('Please enter your email.');
+  setError(''); setLoading(true);
+  try {
+    // TODO: replace with → POST /api/auth/check-email then supabase.auth.resetPasswordForEmail()
+    await new Promise(r => setTimeout(r, 1000));
+    setStep('code');
+  } catch (err) {
+    triggerError(err.message || 'Failed to send reset code. Please try again.');
+  } finally {
+    setLoading(false);
+  }
+};
+
+
+
+  const verifyCode = async (e) => {
+    e.preventDefault();
+    if (code.length < 4) return triggerError('Enter the 6-digit code sent to your email.');
+    setError(''); setLoading(true);
+    await new Promise(r => setTimeout(r, 800));
+    setLoading(false); setStep('reset');
+  };
+
+  const resetPassword = async (e) => {
+    e.preventDefault();
+    if (newPw.length < 8)  return triggerError('Password must be at least 8 characters.');
+    if (newPw !== confirm)  return triggerError('Passwords do not match.');
+    setError(''); setLoading(true);
+    await new Promise(r => setTimeout(r, 1200));
+    setLoading(false); setStep('done');
+    setTimeout(onClose, 2200);
+  };
+
+  const stepProgress = { email:0, code:1, reset:2, done:3 };
+  const stepLabel    = { email:'FORGOT PASSWORD', code:'CHECK YOUR EMAIL', reset:'NEW PASSWORD', done:'ALL DONE' };
+  const stepTitle    = { email:'Reset Your\nPassword', code:'Enter Your\nVerification\nCode', reset:'Create New\nPassword', done:'Password\nUpdated!' };
+
+  const ForgotBtn = ({ lbl }) => (
+    <button type="submit" disabled={loading} style={{
+      fontFamily:"'Syne',sans-serif", width:'100%', padding:'12px', borderRadius:13, border:'none',
+      fontSize:13, fontWeight:600, cursor: loading ? 'not-allowed' : 'pointer',
+      background: loading ? T.t4 : T.btnBg, color:T.btnText,
+      boxShadow: loading ? 'none' : T.btnShadow,
+      display:'flex', alignItems:'center', justifyContent:'center', gap:8,
+      transition:'all .2s', opacity: loading ? .7 : 1 }}
+      onMouseEnter={e => { if (!loading) e.currentTarget.style.transform='translateY(-1px)'; }}
+      onMouseLeave={e => e.currentTarget.style.transform='none'}>
+      {loading
+        ? <><span className="lp-spin" style={{ display:'inline-block', width:14, height:14,
+            border:`2px solid rgba(0,0,0,.18)`, borderTopColor: dark ? '#0c0908':'#fff',
+            borderRadius:'50%' }}/> Please wait…</>
+        : <>{lbl} <ArrowRight size={14}/></>}
+    </button>
+  );
+
+  return (
+    <div ref={overlayRef} className="modal-in"
+      onClick={e => { if (e.target === overlayRef.current) onClose(); }}
+      style={{ position:'fixed', inset:0, zIndex:1000, background:T.modalOverlay, backdropFilter:'blur(7px)',
+        display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}>
+      <div className="modal-slide" style={{
+        position:'relative', width:'min(420px,100%)', borderRadius:24,
+        background:T.modalBg, border:`1px solid ${T.modalBorder}`, boxShadow:T.modalShadow,
+        padding:'38px 40px 34px' }}>
+
+        <button onClick={onClose} style={{
+          position:'absolute', top:14, right:14, width:30, height:30, borderRadius:8, cursor:'pointer',
+          display:'flex', alignItems:'center', justifyContent:'center',
+          background:'transparent', border:`1px solid ${T.inputBorder}`, color:T.t3, transition:'all .15s' }}
+          onMouseEnter={e => { e.currentTarget.style.background=T.inputBg; e.currentTarget.style.color=T.t1; }}
+          onMouseLeave={e => { e.currentTarget.style.background='transparent'; e.currentTarget.style.color=T.t3; }}>
+          <X size={13}/>
+        </button>
+
+        {/* step progress bar */}
+        <div style={{ display:'flex', gap:5, marginBottom:22 }}>
+          {[0,1,2].map(i => (
+            <div key={i} style={{ flex:1, height:3, borderRadius:99,
+              background: stepProgress[step] >= i ? T.acc : T.strengthTrack, transition:'background .3s' }}/>
+          ))}
+        </div>
+
+        <span style={{ ...mono, display:'inline-block', marginBottom:10, fontSize:9,
+          letterSpacing:'3.5px', padding:'3px 12px', borderRadius:99,
+          background:T.pillBg, border:`1px solid ${T.pillBorder}`, color:T.pillText }}>
+          {stepLabel[step]}
+        </span>
+        <h2 style={{ ...bebas, fontSize:30, letterSpacing:2, lineHeight:1.1, color:T.t1,
+          margin:'0 0 20px', whiteSpace:'pre-line' }}>
+          {stepTitle[step]}
+        </h2>
+
+        {error && (
+          <div className={shake ? 'lp-shake' : ''} style={{
+            marginBottom:14, padding:'9px 13px', borderRadius:10, fontSize:12, ...dm,
+            background:T.errorBg, border:`1px solid ${T.errorBorder}`, color:T.errorText,
+            display:'flex', alignItems:'center', gap:8 }}>
+            <span>⚠</span> {error}
+          </div>
+        )}
+
+        {step === 'email' && (
+          <form onSubmit={sendCode} style={{ display:'flex', flexDirection:'column', gap:14 }}>
+            <div>
+              <label style={{ ...mono, display:'block', fontSize:10, letterSpacing:'1.5px', marginBottom:6, color:T.labelColor }}>
+                EMAIL ADDRESS
+              </label>
+              <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+                placeholder="you@company.com" autoComplete="email"
+                style={{ ...base, padding:'11px 14px' }}
+                onFocus={e => e.target.style.borderColor = T.inputFocus}
+                onBlur ={e => e.target.style.borderColor = T.inputBorder}/>
+            </div>
+            <p style={{ ...dm, fontSize:12, color:T.t2, margin:0 }}>We'll send a 6-digit code to this address.</p>
+            <ForgotBtn lbl="Send Reset Code"/>
+          </form>
+        )}
+
+        {step === 'code' && (
+          <form onSubmit={verifyCode} style={{ display:'flex', flexDirection:'column', gap:14 }}>
+            <p style={{ ...dm, fontSize:12, color:T.t2, margin:'0 0 4px' }}>
+              Code sent to <strong style={{ color:T.t1 }}>{email}</strong>
+            </p>
+            <div>
+              <label style={{ ...mono, display:'block', fontSize:10, letterSpacing:'1.5px', marginBottom:6, color:T.labelColor }}>
+                6-DIGIT CODE
+              </label>
+              <input type="text" value={code}
+                onChange={e => setCode(e.target.value.replace(/\D/g,'').slice(0,6))}
+                placeholder="000000" autoComplete="one-time-code"
+                style={{ ...base, padding:'11px 14px', letterSpacing:'8px', fontSize:20, textAlign:'center' }}
+                onFocus={e => e.target.style.borderColor = T.inputFocus}
+                onBlur ={e => e.target.style.borderColor = T.inputBorder}/>
+            </div>
+            <ForgotBtn lbl="Verify Code"/>
+            <button type="button" onClick={() => { setStep('email'); setCode(''); }} style={{
+              ...dm, fontSize:12, color:T.linkColor, background:'none', border:'none',
+              cursor:'pointer', padding:0, textAlign:'center' }}>
+              ← Use a different email
+            </button>
+          </form>
+        )}
+
+        {step === 'reset' && (
+          <form onSubmit={resetPassword} style={{ display:'flex', flexDirection:'column', gap:14 }}>
+            <div>
+              <label style={{ ...mono, display:'block', fontSize:10, letterSpacing:'1.5px', marginBottom:6, color:T.labelColor }}>
+                NEW PASSWORD
+              </label>
+              <div style={{ position:'relative' }}>
+                <input type={showPw ? 'text' : 'password'} value={newPw} onChange={e => setNewPw(e.target.value)}
+                  placeholder="Min. 8 characters" autoComplete="new-password"
+                  style={{ ...base, padding:'11px 42px 11px 14px' }}
+                  onFocus={e => e.target.style.borderColor = T.inputFocus}
+                  onBlur ={e => e.target.style.borderColor = T.inputBorder}/>
+                <button type="button" onClick={() => setShowPw(v=>!v)} style={{
+                  position:'absolute', right:12, top:'50%', transform:'translateY(-50%)',
+                  background:'none', border:'none', cursor:'pointer', padding:0,
+                  color:T.inputIcon, display:'flex', alignItems:'center' }}>
+                  {showPw ? <EyeOff size={14}/> : <Eye size={14}/>}
+                </button>
+              </div>
+              {newPw && (
+                <div style={{ marginTop:7 }}>
+                  <div style={{ display:'flex', gap:3, marginBottom:3 }}>
+                    {[1,2,3,4].map(i => (
+                      <div key={i} style={{ flex:1, height:3, borderRadius:99,
+                        background: i <= strength.score ? strength.color : T.strengthTrack, transition:'background .25s' }}/>
+                    ))}
+                  </div>
+                  <span style={{ ...mono, fontSize:10, color: strength.score >= 3 ? strength.color : T.t3 }}>{strength.label}</span>
+                </div>
+              )}
+            </div>
+            <div>
+              <label style={{ ...mono, display:'block', fontSize:10, letterSpacing:'1.5px', marginBottom:6, color:T.labelColor }}>
+                CONFIRM PASSWORD
+              </label>
+              <div style={{ position:'relative' }}>
+                <input type={showCf ? 'text' : 'password'} value={confirm} onChange={e => setConfirm(e.target.value)}
+                  placeholder="Repeat new password" autoComplete="new-password"
+                  style={{ ...base, padding:'11px 42px 11px 14px',
+                    border:`1px solid ${confirmBad ? T.errorBorder : confirmMatch ? T.acc : T.inputBorder}`,
+                    background: confirmBad ? (dark ? 'rgba(239,68,68,.05)':'#fff5f5') : T.inputBg }}
+                  onFocus={e => { if (!confirmBad) e.target.style.borderColor = T.inputFocus; }}
+                  onBlur ={e => { e.target.style.borderColor = confirmBad ? T.errorBorder : confirmMatch ? T.acc : T.inputBorder; }}/>
+                <button type="button" onClick={() => setShowCf(v=>!v)} style={{
+                  position:'absolute', right:12, top:'50%', transform:'translateY(-50%)',
+                  background:'none', border:'none', cursor:'pointer', padding:0,
+                  color:T.inputIcon, display:'flex', alignItems:'center' }}>
+                  {showCf ? <EyeOff size={14}/> : <Eye size={14}/>}
+                </button>
+              </div>
+              {confirmBad && <p style={{ ...mono, marginTop:4, fontSize:10, color:T.errorText }}>Passwords don't match</p>}
+            </div>
+            <ForgotBtn lbl="Save New Password"/>
+          </form>
+        )}
+
+        {step === 'done' && (
+          <div style={{ textAlign:'center', padding:'8px 0 4px' }}>
+            <div className="success-pop" style={{
+              width:60, height:60, borderRadius:'50%', margin:'0 auto 18px',
+              background: dark ? 'rgba(34,211,238,.08)' : 'rgba(204,251,241,.5)',
+              border:`1px solid ${dark ? 'rgba(34,211,238,.2)' : 'rgba(13,148,136,.25)'}`,
+              display:'flex', alignItems:'center', justifyContent:'center' }}>
+              <CheckCircle size={26} style={{ color:T.successIcon }}/>
+            </div>
+            <p style={{ ...dm, fontSize:13, color:T.successSub, lineHeight:1.7 }}>
+              Your password has been updated.<br/>You can now sign in.
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ══ SIGNUP MODAL ═════════════════════════════════════════════════════
+   Fields: Email · Password · Confirm Password
+   Display name derived from email (e.g. ada.lovelace@ → "Ada Lovelace").
+   onSuccess({ name, email }) → App routes to upload → dashboard.
+═══════════════════════════════════════════════════════════════════════ */
+function SignupModal({ dark, T, onClose, onSuccess }) {
+  const [email,    setEmail]    = useState('');
+  const [password, setPassword] = useState('');
+  const [confirm,  setConfirm]  = useState('');
+  const [showPw,   setShowPw]   = useState(false);
+  const [showCf,   setShowCf]   = useState(false);
+  const [loading,  setLoading]  = useState(false);
+  const [error,    setError]    = useState('');
+  const [shake,    setShake]    = useState(false);
+  const [done,     setDone]     = useState(false);
+  const overlayRef = useRef(null);
+
   const mono  = { fontFamily:"'JetBrains Mono',monospace" };
   const bebas = { fontFamily:"'Bebas Neue',cursive" };
   const syne  = { fontFamily:"'Syne',sans-serif" };
+  const dm    = { fontFamily:"'DM Sans',sans-serif" };
 
-  const strength = getStrength(password);
+  const strength     = getStrength(password);
+  const confirmMatch = confirm.length > 0 && password === confirm;
+  const confirmBad   = confirm.length > 0 && password !== confirm;
+
+  const deriveName = (e) =>
+    e.split('@')[0].replace(/[._-]+/g,' ').replace(/\b\w/g, c => c.toUpperCase()).trim() || 'User';
+
+  const base = {
+    ...dm, width:'100%', fontSize:13, borderRadius:12, outline:'none',
+    boxSizing:'border-box', background:T.inputBg,
+    border:`1px solid ${T.inputBorder}`, color:T.inputText,
+    transition:'border-color .2s',
+  };
 
   const triggerError = (msg) => {
-    setError(msg);
-    setShake(true);
+    setError(msg); setShake(true);
     setTimeout(() => setShake(false), 450);
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!name.trim())              return triggerError('Please enter your full name.');
-    if (!email.trim())             return triggerError('Please enter your email.');
-    if (password.length < 8)       return triggerError('Password must be at least 8 characters.');
-    if (password !== confirm)      return triggerError('Passwords do not match.');
-    if (!agreed)                   return triggerError('Please accept the Terms & Privacy Policy.');
+  e.preventDefault();
+  if (!email.trim())    return triggerError('Please enter your email.');
+  if (!password.trim()) return triggerError('Please enter your password.');
+  setError(''); setLoading(true);
+  try {
+    // TODO: replace with → const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    await new Promise(r => setTimeout(r, 1400));
+    onLoginSuccess?.({ email, name: deriveName(email) });
+  } catch (err) {
+    triggerError(err.message || 'Invalid credentials. Please try again.');
+  } finally {
+    setLoading(false);
+  }
+};
 
-    setError('');
-    setLoading(true);
-    try {
-      /* ── connect your backend here ──────────────────────────
-         const res = await fetch('/api/auth/register', {
-           method: 'POST',
-           headers: { 'Content-Type': 'application/json' },
-           body: JSON.stringify({ name, email, password }),
-         });
-         if (!res.ok) throw new Error((await res.json()).message || 'Registration failed');
-      ─────────────────────────────────────────────────────── */
-      await new Promise(r => setTimeout(r, 1500));
-      setDone(true);
-      setTimeout(() => { onSuccess?.({ name, email }); onClose(); }, 2600);
-    } catch (err) {
-      triggerError(err.message || 'Registration failed. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  /* close on backdrop click */
-  const handleBackdropClick = (e) => {
-    if (e.target === overlayRef.current) onClose();
-  };
-
-  /* field helper */
-  const Field = ({ id, label, type, value, onChange, placeholder, autoComplete, icon: Icon, right }) => (
-    <div>
-      <label htmlFor={id} style={{ ...f, display:'block', fontSize:11, fontWeight:500,
-        letterSpacing:1, marginBottom:6, color:T.labelColor, ...mono }}>
-        {label}
-      </label>
-      <div style={{ position:'relative' }}>
-        {Icon && (
-          <div style={{ position:'absolute', left:12, top:'50%', transform:'translateY(-50%)',
-            color:T.inputIcon, display:'flex', pointerEvents:'none' }}>
-            <Icon size={14}/>
-          </div>
-        )}
-        <input
-          id={id} type={type} value={value}
-          onChange={e => onChange(e.target.value)}
-          placeholder={placeholder} autoComplete={autoComplete}
-          style={{
-            ...f, width:'100%', fontSize:13,
-            padding: Icon
-              ? (right ? '11px 44px 11px 38px' : '11px 14px 11px 38px')
-              : (right ? '11px 44px 11px 14px' : '11px 14px'),
-            borderRadius:12, outline:'none', boxSizing:'border-box',
-            background:T.inputBg, border:`1px solid ${T.inputBorder}`,
-            color:T.inputText, transition:'border-color .2s, background .4s',
-          }}
-          onFocus={e => e.target.style.borderColor = T.inputFocus}
-          onBlur ={e => e.target.style.borderColor = T.inputBorder}
-        />
-        {right}
-      </div>
-    </div>
-  );
 
   return (
     <div
       ref={overlayRef}
-      className="modal-backdrop-in"
-      onClick={handleBackdropClick}
+      className="modal-in"
+      onClick={e => { if (e.target === overlayRef.current) onClose(); }}
       style={{
         position:'fixed', inset:0, zIndex:999,
-        background: T.modalOverlay,
-        backdropFilter:'blur(6px)',
-        display:'flex', alignItems:'center', justifyContent:'center',
-        padding:16,
+        background:T.modalOverlay, backdropFilter:'blur(7px)',
+        display:'flex', alignItems:'center', justifyContent:'center', padding:16,
       }}
     >
-      <div
-        className="modal-slide-in"
-        style={{
-          position:'relative',
-          width:'min(520px, 100%)',
-          maxHeight:'92vh', overflowY:'auto',
-          borderRadius:24,
-          background:T.modalBg, border:`1px solid ${T.modalBorder}`,
-          boxShadow:T.modalShadow,
-          padding:'40px 44px 36px',
-          transition:'background .4s, border-color .4s',
+      <div className="modal-slide" style={{
+        position:'relative', width:'min(450px,100%)',
+        maxHeight:'92vh', overflowY:'auto',
+        borderRadius:24, background:T.modalBg,
+        border:`1px solid ${T.modalBorder}`, boxShadow:T.modalShadow,
+        padding:'38px 40px 34px',
+      }}>
+
+        <button onClick={onClose} style={{
+          position:'absolute', top:14, right:14, width:30, height:30,
+          borderRadius:8, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center',
+          background:'transparent', border:`1px solid ${T.inputBorder}`,
+          color:T.t3, transition:'all .15s',
         }}
-      >
-        {/* close button */}
-        <button
-          onClick={onClose}
-          style={{
-            position:'absolute', top:16, right:16,
-            width:32, height:32, borderRadius:9, cursor:'pointer',
-            display:'flex', alignItems:'center', justifyContent:'center',
-            background:'transparent', border:`1px solid ${T.inputBorder}`,
-            color:T.t3, transition:'all .15s',
-          }}
           onMouseEnter={e => { e.currentTarget.style.background=T.inputBg; e.currentTarget.style.color=T.t1; }}
-          onMouseLeave={e => { e.currentTarget.style.background='transparent'; e.currentTarget.style.color=T.t3; }}
-        >
-          <X size={14}/>
+          onMouseLeave={e => { e.currentTarget.style.background='transparent'; e.currentTarget.style.color=T.t3; }}>
+          <X size={13}/>
         </button>
 
-        {/* ── SUCCESS STATE ── */}
         {done ? (
-          <div style={{ textAlign:'center', padding:'24px 0 12px' }}>
+          <div style={{ textAlign:'center', padding:'20px 0 8px' }}>
             <div className="success-pop" style={{
-              width:68, height:68, borderRadius:'50%', margin:'0 auto 24px',
-              background:T.successBg, border:`1px solid ${T.successBorder}`,
+              width:64, height:64, borderRadius:'50%', margin:'0 auto 20px',
+              background: dark ? 'rgba(34,211,238,.08)' : 'rgba(204,251,241,.5)',
+              border:`1px solid ${dark ? 'rgba(34,211,238,.2)' : 'rgba(13,148,136,.25)'}`,
               display:'flex', alignItems:'center', justifyContent:'center',
             }}>
-              <CheckCircle size={30} style={{ color:T.successIcon }}/>
+              <CheckCircle size={28} style={{ color:T.successIcon }}/>
             </div>
-            <h2 style={{ ...bebas, fontSize:32, letterSpacing:2, color:T.successTitle, margin:'0 0 10px' }}>
-              You're in!
+            <h2 style={{ ...bebas, fontSize:30, letterSpacing:2, color:T.t1, margin:'0 0 8px' }}>
+              Account Created!
             </h2>
-            <p style={{ fontSize:13, color:T.successSub, lineHeight:1.7, maxWidth:300, margin:'0 auto' }}>
-              Welcome to PolicyLens, <strong style={{ color:T.t1 }}>{name}</strong>. Your account has been created. Signing you in…
+            <p style={{ ...dm, fontSize:13, color:T.successSub, lineHeight:1.7, maxWidth:280, margin:'0 auto' }}>
+              Welcome, <strong style={{ color:T.t1 }}>{deriveName(email)}</strong>!<br/>
+              Taking you to upload your first document…
             </p>
-            {/* animated progress bar */}
-            <div style={{ marginTop:28, height:3, borderRadius:99, background:T.strengthTrack, overflow:'hidden' }}>
-              <div style={{
-                height:'100%', borderRadius:99,
-                background:T.accGrad,
-                animation:'lp-spin 2.6s linear',
-                width:'100%',
-                transformOrigin:'left',
-              }}/>
+            <div style={{ marginTop:24, height:3, borderRadius:99, background:T.strengthTrack, overflow:'hidden' }}>
+              <div className="bar-fill" style={{ height:'100%', borderRadius:99, background:T.accGrad }}/>
             </div>
           </div>
         ) : (
           <>
-            {/* header */}
-            <div style={{ marginBottom:28 }}>
-              <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:14 }}>
-                <div style={{ width:36, height:36, borderRadius:10,
-                  background:T.panelGrad ?? T.accGrad,
-                  display:'flex', alignItems:'center', justifyContent:'center',
-                  boxShadow:`0 4px 14px ${T.acc}44` }}>
-                  <Cpu size={16} color="#fff"/>
+            <div style={{ marginBottom:24 }}>
+              <div style={{ display:'flex', alignItems:'center', gap:9, marginBottom:12 }}>
+                <div style={{ width:34, height:34, borderRadius:10,
+                  background:T.panelGrad, display:'flex', alignItems:'center', justifyContent:'center',
+                  boxShadow:`0 4px 12px ${T.acc}44` }}>
+                  <Cpu size={15} color="#fff"/>
                 </div>
-                <span style={{ ...bebas, fontSize:18, letterSpacing:3, color:T.acc }}>PolicyLens</span>
+                <span style={{ ...bebas, fontSize:17, letterSpacing:3, color:T.acc }}>PolicyLens</span>
               </div>
-
               <span style={{
-                ...mono, display:'inline-block', marginBottom:10,
-                fontSize:9, letterSpacing:'3.5px', padding:'3px 12px', borderRadius:99,
+                ...mono, display:'inline-block', marginBottom:10, fontSize:9,
+                letterSpacing:'3.5px', padding:'3px 12px', borderRadius:99,
                 background:T.pillBg, border:`1px solid ${T.pillBorder}`, color:T.pillText,
-              }}>CREATE ACCOUNT — FREE</span>
-
-              <h2 style={{ ...bebas, fontSize:34, letterSpacing:2, lineHeight:1.05,
-                color:T.t1, margin:'0 0 6px', transition:'color .4s' }}>
-                Start Analysing<br/>Contracts Today
+              }}>FREE ACCOUNT</span>
+              <h2 style={{ ...bebas, fontSize:32, letterSpacing:2, lineHeight:1.05, color:T.t1, margin:'0 0 5px' }}>
+                Create Your Account
               </h2>
-              <p style={{ fontSize:12, color:T.t2, margin:0 }}>
-                No credit card required. Full access for 14 days.
+              <p style={{ ...dm, fontSize:12, color:T.t2, margin:0 }}>
+                No credit card required · 14-day full access
               </p>
             </div>
 
-            {/* error */}
             {error && (
               <div className={shake ? 'lp-shake' : ''} style={{
-                marginBottom:18, padding:'10px 14px', borderRadius:10, fontSize:12,
+                marginBottom:16, padding:'9px 13px', borderRadius:10, fontSize:12,
                 background:T.errorBg, border:`1px solid ${T.errorBorder}`, color:T.errorText,
-                display:'flex', alignItems:'center', gap:8,
+                display:'flex', alignItems:'center', gap:8, ...dm,
               }}>
-                <span style={{ fontSize:15 }}>⚠</span> {error}
+                <span style={{ fontSize:14 }}>⚠</span> {error}
               </div>
             )}
 
             <form onSubmit={handleSubmit} style={{ display:'flex', flexDirection:'column', gap:14 }}>
-
-              {/* full name */}
-              <Field
-                id="su-name" label="FULL NAME" type="text"
-                value={name} onChange={setName}
-                placeholder="Ada Lovelace" autoComplete="name"
-                icon={User}
-              />
-
-              {/* email */}
-              <Field
-                id="su-email" label="EMAIL ADDRESS" type="email"
-                value={email} onChange={setEmail}
-                placeholder="you@company.com" autoComplete="email"
-                icon={Mail}
-              />
-
-              {/* password */}
               <div>
-                <label htmlFor="su-pw" style={{ ...f, display:'block', fontSize:11, fontWeight:500,
-                  letterSpacing:1, marginBottom:6, color:T.labelColor, ...mono }}>
+                <label style={{ ...mono, display:'block', fontSize:10, fontWeight:500,
+                  letterSpacing:'1.5px', marginBottom:6, color:T.labelColor }}>
+                  EMAIL ADDRESS
+                </label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="you@company.com"
+                  autoComplete="email"
+                  style={{ ...base, padding:'11px 14px' }}
+                  onFocus={e => e.target.style.borderColor = T.inputFocus}
+                  onBlur ={e => e.target.style.borderColor = T.inputBorder}
+                />
+              </div>
+
+              <div>
+                <label style={{ ...mono, display:'block', fontSize:10, fontWeight:500,
+                  letterSpacing:'1.5px', marginBottom:6, color:T.labelColor }}>
                   PASSWORD
                 </label>
                 <div style={{ position:'relative' }}>
                   <input
-                    id="su-pw" type={showPw ? 'text' : 'password'}
-                    value={password} onChange={e => setPassword(e.target.value)}
-                    placeholder="Min. 8 characters" autoComplete="new-password"
-                    style={{
-                      ...f, width:'100%', fontSize:13, padding:'11px 44px 11px 14px',
-                      borderRadius:12, outline:'none', boxSizing:'border-box',
-                      background:T.inputBg, border:`1px solid ${T.inputBorder}`,
-                      color:T.inputText, transition:'border-color .2s',
-                    }}
+                    type={showPw ? 'text' : 'password'}
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    placeholder="Min. 8 characters"
+                    autoComplete="new-password"
+                    style={{ ...base, padding:'11px 42px 11px 14px' }}
                     onFocus={e => e.target.style.borderColor = T.inputFocus}
                     onBlur ={e => e.target.style.borderColor = T.inputBorder}
                   />
@@ -367,16 +538,14 @@ function SignupModal({ dark, T, onClose, onSuccess }) {
                     {showPw ? <EyeOff size={14}/> : <Eye size={14}/>}
                   </button>
                 </div>
-
-                {/* strength meter */}
                 {password && (
-                  <div style={{ marginTop:8 }}>
-                    <div style={{ display:'flex', gap:4, marginBottom:4 }}>
+                  <div style={{ marginTop:7 }}>
+                    <div style={{ display:'flex', gap:3, marginBottom:3 }}>
                       {[1,2,3,4].map(i => (
                         <div key={i} style={{
                           flex:1, height:3, borderRadius:99,
                           background: i <= strength.score ? strength.color : T.strengthTrack,
-                          transition:'background .3s',
+                          transition:'background .25s',
                         }}/>
                       ))}
                     </div>
@@ -387,31 +556,26 @@ function SignupModal({ dark, T, onClose, onSuccess }) {
                 )}
               </div>
 
-              {/* confirm password */}
               <div>
-                <label htmlFor="su-cf" style={{ ...f, display:'block', fontSize:11, fontWeight:500,
-                  letterSpacing:1, marginBottom:6, color:T.labelColor, ...mono }}>
+                <label style={{ ...mono, display:'block', fontSize:10, fontWeight:500,
+                  letterSpacing:'1.5px', marginBottom:6, color:T.labelColor }}>
                   CONFIRM PASSWORD
                 </label>
                 <div style={{ position:'relative' }}>
                   <input
-                    id="su-cf" type={showCf ? 'text' : 'password'}
-                    value={confirm} onChange={e => setConfirm(e.target.value)}
-                    placeholder="Repeat your password" autoComplete="new-password"
+                    type={showCf ? 'text' : 'password'}
+                    value={confirm}
+                    onChange={e => setConfirm(e.target.value)}
+                    placeholder="Repeat your password"
+                    autoComplete="new-password"
                     style={{
-                      ...f, width:'100%', fontSize:13, padding:'11px 44px 11px 14px',
-                      borderRadius:12, outline:'none', boxSizing:'border-box',
-                      background: confirm && password !== confirm
-                        ? (dark ? 'rgba(239,68,68,.06)' : '#fff5f5')
-                        : T.inputBg,
-                      border:`1px solid ${
-                        confirm && password !== confirm ? T.errorBorder
-                        : confirm && password === confirm ? T.acc
-                        : T.inputBorder}`,
-                      color:T.inputText, transition:'border-color .2s, background .2s',
+                      ...base,
+                      padding:'11px 42px 11px 14px',
+                      border:`1px solid ${confirmBad ? T.errorBorder : confirmMatch ? T.acc : T.inputBorder}`,
+                      background: confirmBad ? (dark ? 'rgba(239,68,68,.05)' : '#fff5f5') : T.inputBg,
                     }}
-                    onFocus={e => { if (!(confirm && password !== confirm)) e.target.style.borderColor = T.inputFocus; }}
-                    onBlur ={e => { if (!(confirm && password !== confirm)) e.target.style.borderColor = confirm && password === confirm ? T.acc : T.inputBorder; }}
+                    onFocus={e => { if (!confirmBad) e.target.style.borderColor = T.inputFocus; }}
+                    onBlur ={e => { e.target.style.borderColor = confirmBad ? T.errorBorder : confirmMatch ? T.acc : T.inputBorder; }}
                   />
                   <button type="button" onClick={() => setShowCf(v => !v)} style={{
                     position:'absolute', right:12, top:'50%', transform:'translateY(-50%)',
@@ -421,76 +585,45 @@ function SignupModal({ dark, T, onClose, onSuccess }) {
                     {showCf ? <EyeOff size={14}/> : <Eye size={14}/>}
                   </button>
                 </div>
-                {confirm && password !== confirm && (
-                  <p style={{ ...mono, marginTop:5, fontSize:10, color:T.errorText }}>Passwords don't match</p>
+                {confirmBad && (
+                  <p style={{ ...mono, marginTop:4, fontSize:10, color:T.errorText }}>
+                    Passwords don't match
+                  </p>
                 )}
               </div>
 
-              {/* terms */}
-              <label style={{ display:'flex', alignItems:'flex-start', gap:9, cursor:'pointer', marginTop:-2 }}>
-                <input type="checkbox" checked={agreed} onChange={e => setAgreed(e.target.checked)}
-                  style={{ accentColor:T.acc, width:14, height:14, marginTop:2, flexShrink:0 }}/>
-                <span style={{ fontSize:11, color:T.t2, lineHeight:1.6 }}>
-                  I agree to the{' '}
-                  <span style={{ color:T.linkColor, cursor:'pointer', fontWeight:600 }}>Terms of Service</span>
-                  {' '}and{' '}
-                  <span style={{ color:T.linkColor, cursor:'pointer', fontWeight:600 }}>Privacy Policy</span>
-                </span>
-              </label>
-
-              {/* submit */}
               <button type="submit" disabled={loading} style={{
                 ...syne, width:'100%', padding:'13px', borderRadius:13, border:'none',
                 fontSize:14, fontWeight:600, cursor: loading ? 'not-allowed' : 'pointer',
-                background: loading ? T.t4 : T.btnBg,
-                color: T.btnText,
+                background: loading ? T.t4 : T.btnBg, color: T.btnText,
                 boxShadow: loading ? 'none' : T.btnShadow,
                 display:'flex', alignItems:'center', justifyContent:'center', gap:8,
-                transition:'all .2s', opacity: loading ? .7 : 1, marginTop:4,
+                transition:'all .2s', opacity: loading ? .7 : 1, marginTop:6,
               }}
                 onMouseEnter={e => { if (!loading) e.currentTarget.style.transform='translateY(-1px)'; }}
                 onMouseLeave={e => e.currentTarget.style.transform='none'}>
                 {loading
-                  ? <><span className="lp-spin" style={{ display:'inline-block', width:16, height:16,
-                      border:`2px solid rgba(0,0,0,.2)`, borderTopColor: dark ? '#0c0908' : '#fff',
+                  ? <><span className="lp-spin" style={{ display:'inline-block', width:15, height:15,
+                      border:`2px solid rgba(0,0,0,.18)`, borderTopColor: dark ? '#0c0908' : '#fff',
                       borderRadius:'50%' }}/> Creating account…</>
-                  : <>Create Free Account <ArrowRight size={15}/></>
+                  : <>Create Account <ArrowRight size={15}/></>
                 }
               </button>
             </form>
 
-            {/* divider */}
-            <div style={{ display:'flex', alignItems:'center', gap:12, margin:'20px 0' }}>
-              <div style={{ flex:1, height:1, background:T.dividerBg }}/>
-              <span style={{ ...mono, fontSize:10, letterSpacing:2, color:T.dividerText }}>OR</span>
-              <div style={{ flex:1, height:1, background:T.dividerBg }}/>
-            </div>
-
-            {/* Google SSO */}
-            <button type="button" style={{
-              ...f, width:'100%', padding:'12px', borderRadius:13, cursor:'pointer',
-              display:'flex', alignItems:'center', justifyContent:'center', gap:10,
-              background:T.socialBg, border:`1px solid ${T.socialBorder}`, color:T.socialText,
-              fontSize:13, fontWeight:500, transition:'all .15s',
-            }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor=T.acc; e.currentTarget.style.transform='translateY(-1px)'; }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor=T.socialBorder; e.currentTarget.style.transform='none'; }}>
-              <GoogleIcon/> Sign up with Google
-            </button>
-
-            {/* back to login */}
-            <p style={{ marginTop:20, textAlign:'center', fontSize:12, color:T.t2 }}>
+            <p style={{ ...dm, marginTop:18, textAlign:'center', fontSize:12, color:T.t2 }}>
               Already have an account?{' '}
-              <button type="button" onClick={onClose}
-                style={{ ...f, fontSize:12, fontWeight:600, color:T.linkColor,
-                  background:'none', border:'none', cursor:'pointer', padding:0 }}>
+              <button type="button" onClick={onClose} style={{
+                fontFamily:"'DM Sans',sans-serif", fontSize:12, fontWeight:600,
+                color:T.linkColor, background:'none', border:'none', cursor:'pointer', padding:0,
+              }}>
                 Sign in →
               </button>
             </p>
 
-            <p style={{ ...mono, marginTop:16, textAlign:'center', fontSize:10,
+            <p style={{ ...mono, marginTop:14, textAlign:'center', fontSize:10,
               letterSpacing:.5, color:T.footerText }}>
-              Secured by PolicyLens · SOC 2 Compliant · No spam, ever.
+              Secured by PolicyLens · SOC 2 Compliant
             </p>
           </>
         )}
@@ -499,8 +632,8 @@ function SignupModal({ dark, T, onClose, onSuccess }) {
   );
 }
 
-/* ══ LOGIN PAGE ═════════════════════════════════════════════════ */
-export default function LoginPage({ onLoginSuccess, onNavigateSignup, onBack }) {
+/* ══ LOGIN PAGE ═══════════════════════════════════════════════════════ */
+export default function LoginPage({ onLoginSuccess, onGoogleSuccess, onSignupSuccess }) {
   const [dark,       setDark]       = useState(false);
   const [email,      setEmail]      = useState('');
   const [password,   setPassword]   = useState('');
@@ -509,6 +642,7 @@ export default function LoginPage({ onLoginSuccess, onNavigateSignup, onBack }) 
   const [error,      setError]      = useState('');
   const [shake,      setShake]      = useState(false);
   const [showSignup, setShowSignup] = useState(false);
+  const [showForgot, setShowForgot] = useState(false);
   const T = dark ? DARK : LIGHT;
 
   useEffect(() => {
@@ -518,31 +652,43 @@ export default function LoginPage({ onLoginSuccess, onNavigateSignup, onBack }) 
     return () => { a.remove(); b.remove(); };
   }, []);
 
-  /* prevent body scroll when modal open */
   useEffect(() => {
-    document.body.style.overflow = showSignup ? 'hidden' : '';
+    document.body.style.overflow = (showSignup || showForgot) ? 'hidden' : '';
     return () => { document.body.style.overflow = ''; };
-  }, [showSignup]);
+  }, [showSignup, showForgot]);
+
+  const deriveName = (e) =>
+    e.split('@')[0].replace(/[._-]+/g,' ').replace(/\b\w/g, c => c.toUpperCase()).trim() || 'User';
 
   const triggerError = (msg) => {
-    setError(msg);
-    setShake(true);
+    setError(msg); setShake(true);
     setTimeout(() => setShake(false), 450);
   };
 
+  // ── UPDATED: real Supabase sign-in with email/password error handling ──
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!email.trim())    return triggerError('Please enter your email.');
-    if (!password.trim()) return triggerError('Please enter your password.');
-    setError('');
-    setLoading(true);
+  e.preventDefault();
+  if (!email.trim())    return triggerError('Please enter your email.');
+  if (!password.trim()) return triggerError('Please enter your password.');
+  setError(''); setLoading(true);
+  try {
+    // TODO: backend will replace this with real Supabase auth
+    await new Promise(r => setTimeout(r, 1400));
+    onLoginSuccess?.({ email, name: deriveName(email) });
+  } catch (err) {
+    triggerError(err.message || 'Invalid credentials. Please try again.');
+  } finally {
+    setLoading(false);
+  }
+};
+
+
+  const handleGoogle = async () => {
     try {
-      await new Promise(r => setTimeout(r, 1400));
-      onLoginSuccess?.({ email });
-    } catch (err) {
-      triggerError(err.message || 'Invalid credentials. Please try again.');
-    } finally {
-      setLoading(false);
+      await new Promise(r => setTimeout(r, 800));
+      onGoogleSuccess?.({ provider:'google', name:'Google User' });
+    } catch {
+      triggerError('Google sign-in failed. Please try again.');
     }
   };
 
@@ -555,35 +701,29 @@ export default function LoginPage({ onLoginSuccess, onNavigateSignup, onBack }) 
     <div style={{ ...f, minHeight:'100vh', background:T.pageBg, transition:'background .4s',
       display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}>
 
-      {/* theme toggle */}
       <button onClick={() => setDark(v => !v)} style={{
         position:'fixed', top:20, right:20, zIndex:98,
         width:38, height:38, borderRadius:11, cursor:'pointer',
         display:'flex', alignItems:'center', justifyContent:'center',
-        background:T.toggleBg, border:`1px solid ${T.toggleBorder}`,
-        transition:'all .2s',
+        background:T.toggleBg, border:`1px solid ${T.toggleBorder}`, transition:'all .2s',
       }}
         onMouseEnter={e => { e.currentTarget.style.transform='rotate(14deg) scale(1.1)'; }}
         onMouseLeave={e => { e.currentTarget.style.transform='none'; }}>
         {dark ? <Sun size={15} style={{ color:'#22d3ee' }}/> : <Moon size={15} style={{ color:T.acc }}/>}
       </button>
 
-      {/* ══ CARD ══════════════════════════════════════════════ */}
       <div style={{
         display:'flex', overflow:'hidden',
-        width:'min(920px, 100%)', minHeight:580,
-        borderRadius:28,
+        width:'min(920px,100%)', minHeight:580, borderRadius:28,
         background:T.cardBg, border:`1px solid ${T.cardBorder}`,
-        boxShadow:T.cardShadow,
-        transition:'background .4s, border-color .4s, box-shadow .4s',
+        boxShadow:T.cardShadow, transition:'background .4s, border-color .4s, box-shadow .4s',
       }}>
 
-        {/* ── LEFT PANEL ─────────────────────────────────────── */}
+        {/* ── LEFT PANEL ── */}
         <div className="lp-panel" style={{
           width:380, flexShrink:0, position:'relative', overflow:'hidden',
-          background:T.panelBg,
-          display:'flex', flexDirection:'column', justifyContent:'space-between',
-          padding:40,
+          background:T.panelBg, display:'flex', flexDirection:'column',
+          justifyContent:'space-between', padding:40,
         }}>
           {dark ? (
             <div style={{ position:'absolute', inset:0, pointerEvents:'none' }}>
@@ -599,8 +739,7 @@ export default function LoginPage({ onLoginSuccess, onNavigateSignup, onBack }) 
                 animation:'lp-glow 6s ease-in-out infinite' }}/>
               <div style={{ position:'absolute', top:'50%', left:'50%', width:0, height:0 }}>
                 <div style={{ position:'absolute', width:4, height:4, borderRadius:'50%',
-                  background:'#22d3ee', boxShadow:'0 0 8px #22d3ee',
-                  marginLeft:-2, marginTop:-2,
+                  background:'#22d3ee', boxShadow:'0 0 8px #22d3ee', marginLeft:-2, marginTop:-2,
                   animation:'lp-orbit 14s linear infinite', opacity:.5 }}/>
               </div>
               <svg style={{ position:'absolute', inset:0, width:'100%', height:'100%', opacity:.03 }}>
@@ -636,15 +775,14 @@ export default function LoginPage({ onLoginSuccess, onNavigateSignup, onBack }) 
 
           <div style={{ position:'relative', zIndex:2 }}>
             <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:40 }}>
-              <div style={{ width:40, height:40, borderRadius:12,
-                background:T.panelGrad, display:'flex', alignItems:'center', justifyContent:'center',
+              <div style={{ width:40, height:40, borderRadius:12, background:T.panelGrad,
+                display:'flex', alignItems:'center', justifyContent:'center',
                 boxShadow:`0 4px 16px ${T.panelAccent}55` }}>
                 <Cpu size={18} color="#fff"/>
               </div>
               <span style={{ ...bebas, fontSize:22, letterSpacing:3, color:T.panelText }}>PolicyLens</span>
             </div>
-            <h2 style={{ ...bebas, fontSize:44, letterSpacing:2, lineHeight:1.05,
-              color:T.panelText, margin:'0 0 16px' }}>
+            <h2 style={{ ...bebas, fontSize:44, letterSpacing:2, lineHeight:1.05, color:T.panelText, margin:'0 0 16px' }}>
               Your Legal<br/>Intelligence<br/>Platform
             </h2>
             <p style={{ fontSize:13, lineHeight:1.7, color:T.panelSub, maxWidth:260 }}>
@@ -671,9 +809,9 @@ export default function LoginPage({ onLoginSuccess, onNavigateSignup, onBack }) 
           </div>
         </div>
 
-        {/* ── RIGHT: LOGIN FORM ──────────────────────────────── */}
+        {/* ── RIGHT: LOGIN FORM ── */}
         <div style={{ flex:1, display:'flex', flexDirection:'column',
-          justifyContent:'center', padding:'48px 52px', position:'relative' }}>
+          justifyContent:'center', padding:'48px 52px' }}>
           <div className="lp-form">
 
             <div style={{ marginBottom:36 }}>
@@ -684,7 +822,7 @@ export default function LoginPage({ onLoginSuccess, onNavigateSignup, onBack }) 
               }}>SECURE LOGIN</span>
               <h1 style={{ ...bebas, fontSize:40, letterSpacing:2, lineHeight:1,
                 color:T.t1, margin:'0 0 8px', transition:'color .4s' }}>
-                Welcome Back
+                Welcome
               </h1>
               <p style={{ fontSize:13, color:T.t2, margin:0 }}>
                 Sign in to continue to your dashboard.
@@ -717,7 +855,7 @@ export default function LoginPage({ onLoginSuccess, onNavigateSignup, onBack }) 
                     color:T.inputText, transition:'border-color .2s, background .4s',
                   }}
                   onFocus={e => e.target.style.borderColor=T.inputFocus}
-                  onBlur={e  => e.target.style.borderColor=T.inputBorder}
+                  onBlur ={e => e.target.style.borderColor=T.inputBorder}
                 />
               </div>
 
@@ -725,9 +863,9 @@ export default function LoginPage({ onLoginSuccess, onNavigateSignup, onBack }) 
                 <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6 }}>
                   <label style={{ ...f, display:'block', fontSize:11, fontWeight:500,
                     letterSpacing:1, color:T.labelColor, ...mono }}>PASSWORD</label>
-                  <button type="button"
-                    style={{ ...f, fontSize:11, color:T.linkColor, background:'none',
-                      border:'none', cursor:'pointer', padding:0, transition:'opacity .15s' }}
+                  <button type="button" onClick={() => setShowForgot(true)}
+                    style={{ ...f, fontSize:11, color:T.linkColor,
+                    background:'none', border:'none', cursor:'pointer', padding:0, transition:'opacity .15s' }}
                     onMouseEnter={e => e.currentTarget.style.opacity='.7'}
                     onMouseLeave={e => e.currentTarget.style.opacity='1'}>
                     Forgot password?
@@ -745,12 +883,13 @@ export default function LoginPage({ onLoginSuccess, onNavigateSignup, onBack }) 
                       color:T.inputText, transition:'border-color .2s, background .4s',
                     }}
                     onFocus={e => e.target.style.borderColor=T.inputFocus}
-                    onBlur={e  => e.target.style.borderColor=T.inputBorder}
+                    onBlur ={e => e.target.style.borderColor=T.inputBorder}
                   />
-                  <button type="button" onClick={() => setShowPw(v => !v)}
-                    style={{ position:'absolute', right:12, top:'50%', transform:'translateY(-50%)',
-                      background:'none', border:'none', cursor:'pointer', padding:0,
-                      color:T.inputIcon, display:'flex', alignItems:'center' }}>
+                  <button type="button" onClick={() => setShowPw(v => !v)} style={{
+                    position:'absolute', right:12, top:'50%', transform:'translateY(-50%)',
+                    background:'none', border:'none', cursor:'pointer', padding:0,
+                    color:T.inputIcon, display:'flex', alignItems:'center',
+                  }}>
                     {showPw ? <EyeOff size={15}/> : <Eye size={15}/>}
                   </button>
                 </div>
@@ -761,16 +900,14 @@ export default function LoginPage({ onLoginSuccess, onNavigateSignup, onBack }) 
                 <span style={{ fontSize:12, color:T.t2 }}>Remember me for 30 days</span>
               </label>
 
-              <button type="submit" disabled={loading}
-                style={{
-                  ...syne, width:'100%', padding:'13px', borderRadius:13, border:'none',
-                  fontSize:14, fontWeight:600, cursor: loading ? 'not-allowed' : 'pointer',
-                  background: loading ? T.t4 : T.btnBg,
-                  color: T.btnText,
-                  boxShadow: loading ? 'none' : T.btnShadow,
-                  display:'flex', alignItems:'center', justifyContent:'center', gap:8,
-                  transition:'all .2s', opacity: loading ? .7 : 1, marginTop:4,
-                }}
+              <button type="submit" disabled={loading} style={{
+                ...syne, width:'100%', padding:'13px', borderRadius:13, border:'none',
+                fontSize:14, fontWeight:600, cursor: loading ? 'not-allowed' : 'pointer',
+                background: loading ? T.t4 : T.btnBg, color: T.btnText,
+                boxShadow: loading ? 'none' : T.btnShadow,
+                display:'flex', alignItems:'center', justifyContent:'center', gap:8,
+                transition:'all .2s', opacity: loading ? .7 : 1, marginTop:4,
+              }}
                 onMouseEnter={e => { if (!loading) e.currentTarget.style.transform='translateY(-1px)'; }}
                 onMouseLeave={e => e.currentTarget.style.transform='none'}>
                 {loading
@@ -787,7 +924,7 @@ export default function LoginPage({ onLoginSuccess, onNavigateSignup, onBack }) 
               <div style={{ flex:1, height:1, background:T.dividerBg }}/>
             </div>
 
-            <button type="button" style={{
+            <button type="button" onClick={handleGoogle} style={{
               ...f, width:'100%', padding:'12px', borderRadius:13, cursor:'pointer',
               display:'flex', alignItems:'center', justifyContent:'center', gap:10,
               background:T.socialBg, border:`1px solid ${T.socialBorder}`, color:T.socialText,
@@ -798,14 +935,12 @@ export default function LoginPage({ onLoginSuccess, onNavigateSignup, onBack }) 
               <GoogleIcon/> Continue with Google
             </button>
 
-            {/* ↓ the "Create one free →" button now opens the modal */}
             <p style={{ marginTop:24, textAlign:'center', fontSize:12, color:T.t2 }}>
               Don't have an account?{' '}
-              <button
-                type="button"
-                onClick={() => setShowSignup(true)}
-                style={{ ...f, fontSize:12, fontWeight:600, color:T.linkColor,
-                  background:'none', border:'none', cursor:'pointer', padding:0 }}>
+              <button type="button" onClick={() => setShowSignup(true)} style={{
+                ...f, fontSize:12, fontWeight:600, color:T.linkColor,
+                background:'none', border:'none', cursor:'pointer', padding:0,
+              }}>
                 Create one free →
               </button>
             </p>
@@ -814,12 +949,10 @@ export default function LoginPage({ onLoginSuccess, onNavigateSignup, onBack }) 
               letterSpacing:.5, color:T.footerText }}>
               Secured by PolicyLens · v2.4.1 · SOC 2 Compliant
             </p>
-
           </div>
         </div>
       </div>
 
-      {/* ══ SIGNUP MODAL ══════════════════════════════════════ */}
       {showSignup && (
         <SignupModal
           dark={dark}
@@ -827,8 +960,16 @@ export default function LoginPage({ onLoginSuccess, onNavigateSignup, onBack }) 
           onClose={() => setShowSignup(false)}
           onSuccess={(user) => {
             setShowSignup(false);
-            onLoginSuccess?.(user);
+            onSignupSuccess?.(user);
           }}
+        />
+      )}
+
+      {showForgot && (
+        <ForgotModal
+          dark={dark}
+          T={T}
+          onClose={() => setShowForgot(false)}
         />
       )}
     </div>

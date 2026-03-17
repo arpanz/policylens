@@ -4,15 +4,15 @@ import Hero from "./components/Hero/Hero";
 import Footer from "./components/Footer/Footer";
 import Login from "./components/Auth/Login";
 import UploadModal from "./components/Dashboard/UploadModal";
-import Dboard from "./components/Dashboard/Dboard"; // This is the new dashboard
-import Chatbot from "./components/Dashboard/Chatbot"; // This is the AI chat
+import Dboard from "./components/Dashboard/Dboard";
+import Chatbot from "./components/Dashboard/Chatbot";
 
 export default function App() {
   const [isDark, setIsDark] = useState(false);
   const [appState, setAppState] = useState('home');
   const [uploadedFile, setUploadedFile] = useState(null);
+  const [userName, setUserName] = useState('');
 
-  // Debugging: Watch state changes in your browser console
   useEffect(() => {
     console.log("Current App State:", appState);
   }, [appState]);
@@ -45,19 +45,20 @@ export default function App() {
   const handleUploadComplete = (file) => {
     console.log("Upload finished! Routing to Dboard...");
     setUploadedFile(file);
-    // Force the state to 'dboard'
-    navigateTo('dboard'); 
+    navigateTo('dboard');
   };
 
-  // 1. DASHBOARD ROUTE (The new UI)
+  // 1. DASHBOARD ROUTE
   if (appState === 'dboard' || appState === 'dashboard') {
     return (
       <Dboard
         file={uploadedFile}
         isDark={isDark}
         toggleTheme={toggleTheme}
+        userName={userName}
         onLogout={() => {
           setUploadedFile(null);
+          setUserName('');
           navigateTo('home');
         }}
         onTriggerUpload={() => navigateTo('upload')}
@@ -66,11 +67,11 @@ export default function App() {
     );
   }
 
-  // 2. CHATBOT ROUTE (The IRIS chat)
+  // 2. CHATBOT ROUTE
   if (appState === 'chatbot') {
     return (
       <div className="relative min-h-screen">
-        <button 
+        <button
           onClick={() => navigateTo('dboard')}
           style={{
             position: 'absolute', top: '24px', left: '24px', zIndex: 50,
@@ -92,8 +93,21 @@ export default function App() {
   if (appState === 'login') {
     return (
       <Login
-        onLoginSuccess={() => navigateTo('upload')}
-        onNavigateSignup={() => {}}
+        // Sign In (email+password) → captures name from email → dashboard
+        onLoginSuccess={(user) => {
+          setUserName(user?.name || '');
+          navigateTo('dboard');
+        }}
+        // Continue with Google → name comes from Google profile → dashboard
+        onGoogleSuccess={(user) => {
+          setUserName(user?.name || 'Google User');
+          navigateTo('dboard');
+        }}
+        // Create free account → name derived from email → upload → dashboard
+        onSignupSuccess={(user) => {
+          setUserName(user?.name || '');
+          navigateTo('upload');
+        }}
         onBack={() => navigateTo('home')}
       />
     );
