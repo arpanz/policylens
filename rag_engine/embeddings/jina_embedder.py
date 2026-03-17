@@ -1,4 +1,8 @@
-"""Jina Embeddings v3 — paid API fallback."""
+"""Jina Embeddings v3 — API-based embedder.
+
+Outputs 768-dimensional vectors to match the Supabase policy_chunks
+vector column (same as bge-base-en-v1.5 local embedder).
+"""
 
 import requests
 
@@ -10,21 +14,23 @@ logger = get_logger(__name__)
 
 
 class JinaEmbedder(BaseEmbedder):
-    """Calls the Jina Embeddings v3 REST API."""
+    """Calls the Jina Embeddings v3 REST API with 768-dim output."""
 
     def __init__(self) -> None:
         from rag_engine.config.settings import settings
 
         if not settings.jina_api_key:
             raise ValueError(
-                "JINA_API_KEY not set in .env. "
-                "Use EMBEDDING_PROVIDER=local for free embeddings."
+                "JINA_API_KEY not set. "
+                "Use EMBEDDING_PROVIDER=local for free local embeddings."
             )
         self._api_key: str = settings.jina_api_key
         self._api_url: str = "https://api.jina.ai/v1/embeddings"
         self._model: str = "jina-embeddings-v3"
+        self._dimensions: int = 768  # match Supabase policy_chunks vector column
+        logger.info("JinaEmbedder initialized | model=%s | dimensions=%d", self._model, self._dimensions)
 
-    # ── BaseEmbedder interface ───────────────────────────────────────
+    # ── BaseEmbedder interface ─────────────────────────────────────────────────────
 
     @property
     def model_id(self) -> str:
@@ -44,7 +50,7 @@ class JinaEmbedder(BaseEmbedder):
 
         return all_embeddings
 
-    # ── internal ─────────────────────────────────────────────────────
+    # ── internal ──────────────────────────────────────────────────────────────────
 
     @with_retry(max_retries=3, delay=1.0, backoff=2.0)
     def _call_api(self, texts: list[str]) -> list[list[float]]:
@@ -52,7 +58,11 @@ class JinaEmbedder(BaseEmbedder):
             "Authorization": f"Bearer {self._api_key}",
             "Content-Type": "application/json",
         }
-        payload = {"model": self._model, "input": texts}
+        payload = {
+            "model": self._model,
+            "input": texts,
+            "dimensions": self._dimensions,  # Jina v3 supports Matryoshka truncation
+        }
         response = requests.post(
             self._api_url, headers=headers, json=payload, timeout=60
         )
