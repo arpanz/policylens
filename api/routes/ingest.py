@@ -33,8 +33,6 @@ def _run_ingestion(policy_id: str, pdf_path: str, overwrite: bool) -> None:
 
 def _run_ingestion_from_file(policy_id: str, tmp_path: str, overwrite: bool) -> None:
     """Run ingestion from a temp file and always clean up afterwards."""
-    with open("C:/tmp/ingest_start.log", "a") as f:
-        f.write(f"Started worker for {policy_id} on {tmp_path}\n")
     try:
         from rag_engine.services.ingestion_service import IngestionService
 
@@ -48,9 +46,7 @@ def _run_ingestion_from_file(policy_id: str, tmp_path: str, overwrite: bool) -> 
     except Exception as e:
         logger.error("File ingestion failed | policy_id=%s | error=%s", policy_id, e)
         import traceback
-        with open("C:/tmp/ingest_error.log", "w") as f:
-            f.write(f"Policy: {policy_id}\n")
-            traceback.print_exc(file=f)
+        logger.error(traceback.format_exc())
     finally:
         if os.path.exists(tmp_path):
             os.unlink(tmp_path)
