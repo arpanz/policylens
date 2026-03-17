@@ -35,8 +35,8 @@ class QueryService:
         self,
         question: str,
         policy_id: str,
-        k: int = 8,
-        top_k_rerank: int = 5,
+        k: int = 5,           # reduced from 8 — fetch 5 candidates
+        top_k_rerank: int = 3, # reduced from 5 — keep top 3 after rerank
     ) -> dict:
         """Answer *question* using chunks from *policy_id*."""
         logger.info(
@@ -76,8 +76,8 @@ class QueryService:
         self,
         question: str,
         policy_id: str,
-        k: int = 8,
-        top_k_rerank: int = 5,
+        k: int = 5,           # reduced from 8
+        top_k_rerank: int = 3, # reduced from 5
     ):
         """Answer *question* via stream using chunks from *policy_id*."""
         logger.info(
@@ -102,9 +102,6 @@ class QueryService:
         prompt = build_query_prompt(question, context, policy_id)
 
         # Step 5 — LLM Stream
-        # We yield tokens. At the very end, we might want to yield a JSON with sources.
-        # For simplicity in this first version, we'll yield tokens.
-        # A more advanced version would use Server-Sent Events (SSE).
         for token in self._llm.stream(prompt, system=SYSTEM_PROMPT):
             yield token
 
@@ -116,9 +113,9 @@ class QueryService:
     ) -> dict:
         """Answer *question* across multiple policies."""
         raw_results = self._retriever.retrieve_multi_policy(
-            question, policy_ids, k_per_policy=4
+            question, policy_ids, k_per_policy=3  # reduced from 4
         )
-        reranked = self._reranker.rerank(question, raw_results, top_k=5)
+        reranked = self._reranker.rerank(question, raw_results, top_k=3)  # reduced from 5
         context = self._context_builder.build(reranked)
 
         from rag_engine.prompts.context_template import build_query_prompt
