@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Eye, EyeOff, ArrowRight, Sun, Moon, Cpu, Shield, Zap, Lock, X, CheckCircle } from 'lucide-react';
-//import { supabase } from '../lib/supabaseClient'; // ← adjust path to your supabase client
+import { fetchApi } from '../../api';
 
 const FONT_LINK =
   'https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Syne:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap';
@@ -82,6 +82,7 @@ const DARK = {
   successIcon:'#22d3ee', successSub:'rgba(207,250,254,.6)',
 };
 
+// ── defined only ONCE ──
 function getStrength(pw) {
   if (!pw) return { score: 0, label: '', color: 'transparent' };
   let s = 0;
@@ -110,7 +111,7 @@ const GoogleIcon = () => (
 
 /* ══ FORGOT PASSWORD MODAL ════════════════════════════════════════════ */
 function ForgotModal({ dark, T, onClose }) {
-  const [step,    setStep]    = useState('email'); // 'email' | 'code' | 'reset' | 'done'
+  const [step,    setStep]    = useState('email');
   const [email,   setEmail]   = useState('');
   const [code,    setCode]    = useState('');
   const [newPw,   setNewPw]   = useState('');
@@ -132,23 +133,20 @@ function ForgotModal({ dark, T, onClose }) {
     background:T.inputBg, border:`1px solid ${T.inputBorder}`, color:T.inputText, transition:'border-color .2s' };
   const triggerError = (msg) => { setError(msg); setShake(true); setTimeout(() => setShake(false), 450); };
 
-  // ── UPDATED: check if email exists before sending reset code ──
   const sendCode = async (e) => {
-  e.preventDefault();
-  if (!email.trim()) return triggerError('Please enter your email.');
-  setError(''); setLoading(true);
-  try {
-    // TODO: replace with → POST /api/auth/check-email then supabase.auth.resetPasswordForEmail()
-    await new Promise(r => setTimeout(r, 1000));
-    setStep('code');
-  } catch (err) {
-    triggerError(err.message || 'Failed to send reset code. Please try again.');
-  } finally {
-    setLoading(false);
-  }
-};
-
-
+    e.preventDefault();
+    if (!email.trim()) return triggerError('Please enter your email.');
+    setError(''); setLoading(true);
+    try {
+      // TODO: replace with → POST /api/auth/check-email then supabase.auth.resetPasswordForEmail()
+      await new Promise(r => setTimeout(r, 1000));
+      setStep('code');
+    } catch (err) {
+      triggerError(err.message || 'Failed to send reset code. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const verifyCode = async (e) => {
     e.preventDefault();
@@ -209,7 +207,6 @@ function ForgotModal({ dark, T, onClose }) {
           <X size={13}/>
         </button>
 
-        {/* step progress bar */}
         <div style={{ display:'flex', gap:5, marginBottom:22 }}>
           {[0,1,2].map(i => (
             <div key={i} style={{ flex:1, height:3, borderRadius:99,
@@ -353,12 +350,9 @@ function ForgotModal({ dark, T, onClose }) {
   );
 }
 
-/* ══ SIGNUP MODAL ═════════════════════════════════════════════════════
-   Fields: Email · Password · Confirm Password
-   Display name derived from email (e.g. ada.lovelace@ → "Ada Lovelace").
-   onSuccess({ name, email }) → App routes to upload → dashboard.
-═══════════════════════════════════════════════════════════════════════ */
+/* ══ SIGNUP MODAL ═════════════════════════════════════════════════════ */
 function SignupModal({ dark, T, onClose, onSuccess }) {
+  const [name,     setName]     = useState('');
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
   const [confirm,  setConfirm]  = useState('');
@@ -379,9 +373,6 @@ function SignupModal({ dark, T, onClose, onSuccess }) {
   const confirmMatch = confirm.length > 0 && password === confirm;
   const confirmBad   = confirm.length > 0 && password !== confirm;
 
-  const deriveName = (e) =>
-    e.split('@')[0].replace(/[._-]+/g,' ').replace(/\b\w/g, c => c.toUpperCase()).trim() || 'User';
-
   const base = {
     ...dm, width:'100%', fontSize:13, borderRadius:12, outline:'none',
     boxSizing:'border-box', background:T.inputBg,
@@ -394,22 +385,29 @@ function SignupModal({ dark, T, onClose, onSuccess }) {
     setTimeout(() => setShake(false), 450);
   };
 
+  // ── backend's real signup via fetchApi ──
   const handleSubmit = async (e) => {
-  e.preventDefault();
-  if (!email.trim())    return triggerError('Please enter your email.');
-  if (!password.trim()) return triggerError('Please enter your password.');
-  setError(''); setLoading(true);
-  try {
-    // TODO: replace with → const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    await new Promise(r => setTimeout(r, 1400));
-    onLoginSuccess?.({ email, name: deriveName(email) });
-  } catch (err) {
-    triggerError(err.message || 'Invalid credentials. Please try again.');
-  } finally {
-    setLoading(false);
-  }
-};
-
+    e.preventDefault();
+    if (!name.trim())         return triggerError('Please enter your name.');
+    if (!email.trim())        return triggerError('Please enter your email.');
+    if (password.length < 8)  return triggerError('Password must be at least 8 characters.');
+    if (password !== confirm)  return triggerError('Passwords do not match.');
+    setError(''); setLoading(true);
+    try {
+      const data = await fetchApi('/auth/signup', {
+        method: 'POST',
+        body: { name, email, password }
+      });
+      console.log('Signup successful:', data);
+      localStorage.setItem('token', data.token);
+      setDone(true);
+      setTimeout(() => { onSuccess?.({ name, email }); onClose(); }, 2000);
+    } catch (err) {
+      triggerError(err.message || 'Registration failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div
@@ -455,7 +453,7 @@ function SignupModal({ dark, T, onClose, onSuccess }) {
               Account Created!
             </h2>
             <p style={{ ...dm, fontSize:13, color:T.successSub, lineHeight:1.7, maxWidth:280, margin:'0 auto' }}>
-              Welcome, <strong style={{ color:T.t1 }}>{deriveName(email)}</strong>!<br/>
+              Welcome, <strong style={{ color:T.t1 }}>{name}</strong>!<br/>
               Taking you to upload your first document…
             </p>
             <div style={{ marginTop:24, height:3, borderRadius:99, background:T.strengthTrack, overflow:'hidden' }}>
@@ -497,6 +495,26 @@ function SignupModal({ dark, T, onClose, onSuccess }) {
             )}
 
             <form onSubmit={handleSubmit} style={{ display:'flex', flexDirection:'column', gap:14 }}>
+
+              {/* NAME */}
+              <div>
+                <label style={{ ...mono, display:'block', fontSize:10, fontWeight:500,
+                  letterSpacing:'1.5px', marginBottom:6, color:T.labelColor }}>
+                  FULL NAME
+                </label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  placeholder="Ada Lovelace"
+                  autoComplete="name"
+                  style={{ ...base, padding:'11px 14px' }}
+                  onFocus={e => e.target.style.borderColor = T.inputFocus}
+                  onBlur ={e => e.target.style.borderColor = T.inputBorder}
+                />
+              </div>
+
+              {/* EMAIL */}
               <div>
                 <label style={{ ...mono, display:'block', fontSize:10, fontWeight:500,
                   letterSpacing:'1.5px', marginBottom:6, color:T.labelColor }}>
@@ -514,6 +532,7 @@ function SignupModal({ dark, T, onClose, onSuccess }) {
                 />
               </div>
 
+              {/* PASSWORD */}
               <div>
                 <label style={{ ...mono, display:'block', fontSize:10, fontWeight:500,
                   letterSpacing:'1.5px', marginBottom:6, color:T.labelColor }}>
@@ -556,6 +575,7 @@ function SignupModal({ dark, T, onClose, onSuccess }) {
                 )}
               </div>
 
+              {/* CONFIRM PASSWORD */}
               <div>
                 <label style={{ ...mono, display:'block', fontSize:10, fontWeight:500,
                   letterSpacing:'1.5px', marginBottom:6, color:T.labelColor }}>
@@ -665,30 +685,36 @@ export default function LoginPage({ onLoginSuccess, onGoogleSuccess, onSignupSuc
     setTimeout(() => setShake(false), 450);
   };
 
-  // ── UPDATED: real Supabase sign-in with email/password error handling ──
   const handleSubmit = async (e) => {
-  e.preventDefault();
-  if (!email.trim())    return triggerError('Please enter your email.');
-  if (!password.trim()) return triggerError('Please enter your password.');
-  setError(''); setLoading(true);
-  try {
-    // TODO: backend will replace this with real Supabase auth
-    await new Promise(r => setTimeout(r, 1400));
-    onLoginSuccess?.({ email, name: deriveName(email) });
-  } catch (err) {
-    triggerError(err.message || 'Invalid credentials. Please try again.');
-  } finally {
-    setLoading(false);
-  }
-};
+    e.preventDefault();
+    if (!email.trim())    return triggerError('Please enter your email.');
+    if (!password.trim()) return triggerError('Please enter your password.');
+    setError(''); setLoading(true);
+    try {
+      // TODO: replace with → const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      await new Promise(r => setTimeout(r, 1400));
+      onLoginSuccess?.({ email, name: deriveName(email) });
+    } catch (err) {
+      triggerError(err.message || 'Invalid credentials. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-
+  // ── backend's real Google/login via fetchApi ──
   const handleGoogle = async () => {
     try {
-      await new Promise(r => setTimeout(r, 800));
-      onGoogleSuccess?.({ provider:'google', name:'Google User' });
-    } catch {
-      triggerError('Google sign-in failed. Please try again.');
+      const data = await fetchApi('/auth/login', {
+        method: 'POST',
+        body: { email, password }
+      });
+      localStorage.setItem('token', data.token);
+      console.log('Login successful:', data);
+      onLoginSuccess?.({ email });
+    } catch (err) {
+      triggerError(err.message || 'Invalid credentials. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 

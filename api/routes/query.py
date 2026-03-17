@@ -42,3 +42,26 @@ async def query_policy(body: QueryRequest, request: Request):
         sources=result["sources"],
         status="success",
     )
+
+
+from fastapi.responses import StreamingResponse
+
+
+@router.post("/stream")
+async def stream_query_policy(body: QueryRequest, request: Request):
+    """Run the RAG pipeline for a single policy question with streaming response."""
+    query_service = request.app.state.query_service
+
+    def content_generator():
+        try:
+            for token in query_service.stream_query(
+                question=body.question,
+                policy_id=body.policy_id,
+                k=body.k,
+            ):
+                yield token
+        except Exception as exc:
+            logger.exception("QueryService.stream_query failed")
+            yield f"Error: {str(exc)}"
+
+    return StreamingResponse(content_generator(), media_type="text/plain")

@@ -3,6 +3,7 @@ import {
   Sparkles, ShieldCheck, Sun, Moon, Aperture
 } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
+import { streamApi } from '../../api';
 
 const FONT_LINK =
   'https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Syne:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap';
@@ -130,18 +131,30 @@ export default function Chatbot({ file, isDark: initDark }) {
     messagesEndRef.current?.scrollIntoView({ behavior:'smooth' });
   }, [messages, isTyping]);
 
-  const handleSend = (e) => {
+  const handleSend = async (e) => {
     if (e?.preventDefault) e.preventDefault();
     const text = typeof e === 'string' ? e : chatMessage;
     if (!text.trim()) return;
     setMessages(p => [...p, { id:Date.now(), sender:'user', text }]);
     setChatMessage('');
     setIsTyping(true);
-    setTimeout(() => {
-      setMessages(p => [...p, { id:Date.now()+1, sender:'ai',
-        text:'Analyzing clause context… This is a simulated response. Connect the backend model to retrieve clause-specific analysis from your document.' }]);
+    const aiMsgId = Date.now() + 1;
+    setMessages(p => [...p, { id: aiMsgId, sender: 'ai', text: '' }]);
+    
+    try {
+      await streamApi('/query/stream', {
+        method: 'POST',
+        body: { question: text, policy_id: file?.policy_id || 'test' }
+      }, (token) => {
+        setMessages(prev => prev.map(m => 
+          m.id === aiMsgId ? { ...m, text: m.text + token } : m
+        ));
+      });
+    } catch (err) {
+      setMessages(p => [...p, { id: Date.now() + 2, sender: 'ai', text: 'Error: ' + err.message }]);
+    } finally {
       setIsTyping(false);
-    }, 1600);
+    }
   };
 
   /* ── Export chat log as .pdf ── */

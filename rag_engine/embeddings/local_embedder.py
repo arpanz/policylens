@@ -15,13 +15,13 @@ _BGE_QUERY_PREFIX = (
 class LocalEmbedder(BaseEmbedder):
     """Runs embedding inference locally on CPU via sentence-transformers."""
 
-    def __init__(self, model_name: str = "BAAI/bge-large-en-v1.5") -> None:
+    def __init__(self, model_name: str = "BAAI/bge-base-en-v1.5") -> None:
         self._model_name = model_name
         logger.info(
-            "Loading local embedding model: %s (first run downloads ~1.3GB)",
+            "Loading local embedding model: %s",
             model_name,
         )
-        self._model = SentenceTransformer(model_name, device="cpu")
+        self._model = SentenceTransformer(model_name)
         logger.info("Model loaded. Dimension: %d", self.get_dimension())
 
     # ── BaseEmbedder interface ───────────────────────────────────────

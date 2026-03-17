@@ -39,6 +39,10 @@ class Settings(BaseSettings):
     # reranker
     reranker_provider: str = "cross_encoder"
 
+    # backend integration
+    port: int = 4000
+    python_api_url: str = "http://localhost:8000"
+
     debug: bool = False
 
 

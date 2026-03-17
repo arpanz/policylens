@@ -30,9 +30,10 @@ logger = logging.getLogger(__name__)
 # ------------------------------------------------------------------ #
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Load QueryService on startup so the first request is fast."""
+    logger.info("Lifespan: Loading heavy components...")
     from rag_engine.services.query_service import QueryService
 
+    logger.info("Initializing QueryService...")
     app.state.query_service = QueryService()
     logger.info("QueryService loaded and ready")
     yield  # app is running

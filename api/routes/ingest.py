@@ -45,6 +45,8 @@ def _run_ingestion_from_file(policy_id: str, tmp_path: str, overwrite: bool) -> 
             _auto_generate_summary(policy_id)
     except Exception as e:
         logger.error("File ingestion failed | policy_id=%s | error=%s", policy_id, e)
+        import traceback
+        logger.error(traceback.format_exc())
     finally:
         if os.path.exists(tmp_path):
             os.unlink(tmp_path)
@@ -96,17 +98,34 @@ async def ingest_policy(body: IngestRequest, background_tasks: BackgroundTasks):
 async def ingest_status(policy_id: str):
     """Check whether a policy has been ingested and how many chunks it has."""
     from rag_engine.vector_store.store_factory import get_vector_store
+    from rag_engine.utils.status_tracker import status_tracker
 
     store = get_vector_store()
     exists = store.policy_exists(policy_id)
     count = store.get_policy_chunk_count(policy_id) if exists else 0
-
-    return {
+    
+    tracked = status_tracker.get_status(policy_id)
+    
+    response = {
         "policy_id": policy_id,
         "ingested": exists,
         "chunk_count": count,
         "status": "ready" if exists else "not_found",
+        "progress": 100 if exists else 0,
+        "message": "Complete" if exists else "Initializing..."
     }
+    
+    if tracked:
+        # Merge tracked info, but let 'exists' override if it's already in store
+        response.update(tracked)
+        if exists:
+            response["status"] = "ready"
+            response["progress"] = 100
+            response["message"] = "Complete"
+        elif tracked["status"] == "processing":
+            response["status"] = "processing"
+            
+    return response
 
 
 # ------------------------------------------------------------------ #
@@ -115,10 +134,11 @@ async def ingest_status(policy_id: str):
 @router.post("/upload", response_model=IngestResponse)
 async def ingest_upload(
     file: UploadFile,
+    background_tasks: BackgroundTasks,
     policy_id: str = Form(...),
     overwrite: bool = Form(False),
-    background_tasks: BackgroundTasks = BackgroundTasks(),
 ):
+    print(f"[DEBUG] Received ingest/upload request for policy_id: {policy_id}")
     """Upload a PDF file and ingest it in the background."""
     # a) Validate file type
     if not file.filename or not file.filename.endswith(".pdf"):
