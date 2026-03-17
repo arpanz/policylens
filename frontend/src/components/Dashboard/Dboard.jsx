@@ -16,12 +16,15 @@ const KEYFRAMES = `
   @keyframes cb-pulse { 0%,100%{opacity:.4;transform:scale(1)} 50%{opacity:1;transform:scale(1.2)} }
   @keyframes spin { to { transform: rotate(360deg); } }
   @keyframes fadeIn { from{opacity:0;transform:scale(.97)} to{opacity:1;transform:scale(1)} }
+  @keyframes shimmer { 0%{background-position:-400px 0} 100%{background-position:400px 0} }
   .cb-db1{animation:cb-db 1.2s infinite 0ms}
   .cb-db2{animation:cb-db 1.2s infinite 150ms}
   .cb-db3{animation:cb-db 1.2s infinite 300ms}
   .cb-msg{animation:cb-slideUp .25s cubic-bezier(0.16,1,0.3,1)}
   .spin-anim{animation:spin 1s linear infinite}
   .fade-in{animation:fadeIn .3s cubic-bezier(0.16,1,0.3,1)}
+  .skeleton{animation:shimmer 1.4s infinite linear; background:linear-gradient(90deg,#e5e7eb 25%,#f3f4f6 50%,#e5e7eb 75%); background-size:400px 100%;}
+  .skeleton-dark{animation:shimmer 1.4s infinite linear; background:linear-gradient(90deg,#1a1310 25%,#231a15 50%,#1a1310 75%); background-size:400px 100%;}
   .cb-scrollbar::-webkit-scrollbar{width:5px}
   .cb-scrollbar::-webkit-scrollbar-thumb{border-radius:5px}
 `;
@@ -76,40 +79,9 @@ const DARK = {
   divider:'#1a1310',
 };
 
-const SAMPLE_HISTORY = [
-  {
-    id:1, filename:'HDFC_Life_ClickProtect.pdf', date:'Mar 15, 2026',
-    policy_type:'Term Life', insurer:'HDFC Life',
-    analysis:{
-      policy_name:'HDFC Life Click 2 Protect Super',
-      policy_type:'Term Life', insurer:'HDFC Life Insurance Co. Ltd.', uin:'101N145V02',
-      key_benefits:[
-        'Life cover up to age 85','Critical illness benefit rider',
-        'Premium waiver on disability','Return of premium option',
-        'Increasing cover option','Accidental death benefit',
-      ],
-      exclusions:[
-        'Suicide within 12 months of issuance','Pre-existing conditions (first 2 years)',
-        'Hazardous activities or adventure sports','War, riot or civil commotion',
-        'Self-inflicted injuries','Substance or alcohol abuse',
-      ],
-      death_benefit:'Sum assured paid as lump sum or monthly income to nominee. Minimum sum assured is ₹50 Lakhs.',
-      survival_benefit:'No survival benefit under base plan. Return of Premium variant returns total premiums paid on maturity.',
-      surrender_value:'Policy acquires surrender value after 3 consecutive premium years. Value depends on premiums paid and remaining term.',
-      loan_facility:null,
-      free_look_period:'30 days',
-      tax_benefit:'Premiums qualify for deduction under Section 80C up to ₹1.5L. Death benefit is fully tax-free under Section 10(10D).',
-      important_conditions:[
-        'Medical examination mandatory for sum assured above ₹1 Crore',
-        'Grace period of 30 days for annual/semi-annual mode',
-        'Policy lapses if premium unpaid beyond grace period',
-        'Revival allowed within 5 years of lapse with applicable interest',
-      ],
-    },
-  },
-  { id:2, filename:'LIC_JeevanAnand.pdf', date:'Mar 12, 2026', policy_type:'Endowment', insurer:'LIC of India', analysis:null },
-  { id:3, filename:'StarHealth_Comprehensive.pdf', date:'Mar 10, 2026', policy_type:'Health', insurer:'Star Health', analysis:null },
-];
+import { fetchApi, streamApi } from '../../api';
+
+const SAMPLE_HISTORY = [];
 
 export default function Dboard({ file, isDark: initDark = true }) {
   const [dark,           setDark]           = useState(initDark);
@@ -117,6 +89,7 @@ export default function Dboard({ file, isDark: initDark = true }) {
   const [activeTab,      setActiveTab]      = useState('home');
   const [history,        setHistory]        = useState(SAMPLE_HISTORY);
   const [activeAnalysis, setActiveAnalysis] = useState(null);
+  const [summaryLoading, setSummaryLoading] = useState(false); // NEW: skeleton state
   const [isDragging,     setIsDragging]     = useState(false);
   const [uploading,      setUploading]      = useState(false);
   const [uploadPct,      setUploadPct]      = useState(0);
@@ -135,6 +108,7 @@ export default function Dboard({ file, isDark: initDark = true }) {
   const fileRef = useRef(null);
   const hdrRef  = useRef(null);
   const chatEnd = useRef(null);
+  const summaryPollRef = useRef(null); // NEW: ref to clear poll on unmount
 
   const T    = dark ? DARK : LIGHT;
   const f    = { fontFamily:"'DM Sans', sans-serif" };
@@ -149,37 +123,121 @@ export default function Dboard({ file, isDark: initDark = true }) {
     return () => { link.remove(); style.remove(); };
   }, []);
 
+  // Clear summary poll on unmount
+  useEffect(() => {
+    return () => { if (summaryPollRef.current) clearInterval(summaryPollRef.current); };
+  }, []);
+
   useEffect(() => {
     chatEnd.current?.scrollIntoView({ behavior:'smooth' });
   }, [chatMessages, isTyping]);
 
+  const loadHistory = async () => {
+    try {
+      const data = await fetchApi('/policies');
+      const formatted = data.map(item => ({
+        id: item.policy_id,
+        filename: item.filename,
+        date: new Date(item.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
+        policy_type: 'Detected',
+        insurer: 'PolicyLens AI',
+        analysis: null
+      }));
+      setHistory(formatted);
+    } catch (err) {
+      console.error('Failed to load history:', err);
+    }
+  };
+
   useEffect(() => {
+    loadHistory();
     if (file) processFile(file);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const processFile = useCallback((f) => {
-    setUploading(true); setUploadPct(0);
-    const iv = setInterval(() => {
-      setUploadPct(p => {
-        if (p >= 100) {
-          clearInterval(iv);
-          setUploading(false);
-          setActiveAnalysis(SAMPLE_HISTORY[0].analysis);
-          setHistory(prev => [{
-            id: Date.now(),
-            filename: f.name,
-            date: new Date().toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' }),
-            policy_type:'Term Life', insurer:'Detected',
-            analysis: SAMPLE_HISTORY[0].analysis,
-          }, ...prev]);
-          setActiveTab('home');
-          return 100;
+  // NEW: Poll for summary every 6s — stops when it arrives (max 20 attempts = ~2min)
+  const pollForSummary = useCallback((policy_id) => {
+    setSummaryLoading(true);
+    setActiveTab('home');
+    let attempts = 0;
+    const MAX_ATTEMPTS = 20;
+
+    if (summaryPollRef.current) clearInterval(summaryPollRef.current);
+
+    summaryPollRef.current = setInterval(async () => {
+      attempts++;
+      try {
+        const data = await fetchApi(`/policies/${policy_id}/summary`);
+        if (data && data.summary) {
+          clearInterval(summaryPollRef.current);
+          setSummaryLoading(false);
+          setActiveAnalysis(data.summary);
+          setHistory(h => h.map(x => x.id === policy_id ? { ...x, analysis: data.summary } : x));
         }
-        return p + 4;
-      });
-    }, 80);
+      } catch (err) {
+        // 404 means still generating — keep polling
+        if (attempts >= MAX_ATTEMPTS) {
+          clearInterval(summaryPollRef.current);
+          setSummaryLoading(false);
+          console.error('Summary polling timed out for', policy_id);
+        }
+      }
+    }, 6000);
   }, []);
+
+  // Keep old fetchSummary for manual "View" button clicks from history
+  const fetchSummary = async (policy_id) => {
+    try {
+      const data = await fetchApi(`/policies/${policy_id}/summary`);
+      if (data && data.summary) {
+        setActiveAnalysis(data.summary);
+        setActiveTab('home');
+        setHistory(h => h.map(x => x.id === policy_id ? { ...x, analysis: data.summary } : x));
+      }
+    } catch (err) {
+      // Summary still generating — start polling
+      console.log('Summary not ready yet, starting poll...');
+      pollForSummary(policy_id);
+    }
+  };
+
+  const processFile = useCallback(async (f) => {
+    setUploading(true); setUploadPct(5);
+    try {
+      const fd = new FormData();
+      fd.append('file', f);
+      const data = await fetchApi('/ingest/upload', {
+        method: 'POST',
+        body: fd
+      });
+      const pid = data.policy_id;
+      setUploadPct(20);
+      
+      const poll = setInterval(async () => {
+         try {
+           const sData = await fetchApi(`/ingest/status/${pid}`);
+           if (sData.progress !== undefined) {
+             setUploadPct(sData.progress);
+           }
+           if (sData.status === 'ready') {
+              clearInterval(poll);
+              setUploadPct(100);
+              setTimeout(() => {
+                setUploading(false);
+                loadHistory();
+                // NEW: start polling for summary instead of one-shot fetch
+                pollForSummary(pid);
+              }, 800);
+           }
+         } catch(e) {
+           console.error('[POLL ERROR]', e);
+         }
+      }, 2000);
+    } catch (err) {
+      setUploading(false);
+      alert('Upload failed: ' + err.message);
+    }
+  }, [pollForSummary]);
 
   const handleDrop = useCallback((e) => {
     e.preventDefault(); setIsDragging(false);
@@ -187,18 +245,37 @@ export default function Dboard({ file, isDark: initDark = true }) {
     if (picked) processFile(picked);
   }, [processFile]);
 
-  const sendChat = () => {
+  const sendChat = async () => {
     if (!chatInput.trim() || isTyping) return;
     const text = chatInput;
     setChatMessages(p => [...p, { id:Date.now(), sender:'user', text }]);
-    setChatInput(''); setIsTyping(true);
-    setTimeout(() => {
-      setChatMessages(p => [...p, {
-        id:Date.now()+1, sender:'ai',
-        text:'Analyzing clause context… Connect the backend model to retrieve clause-specific analysis from your document.',
-      }]);
+    setChatInput(''); 
+    setIsTyping(true);
+    
+    let pid = activeAnalysis ? activeAnalysis.policy_id : (history.length > 0 ? history[0].id : null);
+
+    try {
+      if (!pid) {
+        throw new Error('Please upload and analyze a policy first.');
+      }
+
+      const aiMsgId = Date.now() + 1;
+      setChatMessages(p => [...p, { id: aiMsgId, sender: 'ai', text: '' }]);
+
+      await streamApi('/query/stream', {
+        method: 'POST',
+        body: { question: text, policy_id: pid }
+      }, (token) => {
+        setChatMessages(prev => prev.map(m => 
+          m.id === aiMsgId ? { ...m, text: m.text + token } : m
+        ));
+      });
+
+    } catch (err) {
+      setChatMessages(p => [...p, { id: Date.now() + 2, sender: 'ai', text: err.message || "Failed to get response." }]);
+    } finally {
       setIsTyping(false);
-    }, 1600);
+    }
   };
 
   // ── Sub-components ────────────────────────────────────────────────────────
@@ -277,6 +354,46 @@ export default function Dboard({ file, isDark: initDark = true }) {
       </div>
     );
   };
+
+  // NEW: Skeleton loader for when summary is generating
+  const SummarySkeleton = () => (
+    <div className="fade-in" style={{ display:'flex', flexDirection:'column', gap:20 }}>
+      {/* Header skeleton */}
+      <div style={{ borderRadius:20, padding:'26px 30px', background:T.cardBg, border:`1px solid ${T.cardBorder}`, boxShadow:T.cardShadow }}>
+        <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:12 }}>
+          <div className={dark ? 'skeleton-dark' : 'skeleton'} style={{ height:42, width:280, borderRadius:8 }} />
+          <div className={dark ? 'skeleton-dark' : 'skeleton'} style={{ height:24, width:80, borderRadius:20 }} />
+        </div>
+        <div className={dark ? 'skeleton-dark' : 'skeleton'} style={{ height:18, width:200, borderRadius:6 }} />
+      </div>
+      {/* Benefits / Exclusions skeleton */}
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:20 }}>
+        {[0,1].map(i => (
+          <div key={i} style={{ borderRadius:20, padding:'22px 24px', background:T.cardBg, border:`1px solid ${T.cardBorder}`, boxShadow:T.cardShadow }}>
+            <div className={dark ? 'skeleton-dark' : 'skeleton'} style={{ height:14, width:100, borderRadius:6, marginBottom:16 }} />
+            {[0,1,2,3].map(j => (
+              <div key={j} className={dark ? 'skeleton-dark' : 'skeleton'} style={{ height:13, width:`${85 - j*8}%`, borderRadius:6, marginBottom:10 }} />
+            ))}
+          </div>
+        ))}
+      </div>
+      {/* Info grid skeleton */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:16 }}>
+        {[0,1,2,3,4,5].map(i => (
+          <div key={i} style={{ borderRadius:16, padding:'18px 20px', background:T.cardBg, border:`1px solid ${T.cardBorder}`, boxShadow:T.cardShadow }}>
+            <div className={dark ? 'skeleton-dark' : 'skeleton'} style={{ height:12, width:80, borderRadius:6, marginBottom:10 }} />
+            <div className={dark ? 'skeleton-dark' : 'skeleton'} style={{ height:13, width:'90%', borderRadius:6 }} />
+          </div>
+        ))}
+      </div>
+      {/* Status text */}
+      <div style={{ textAlign:'center', padding:'8px 0' }}>
+        <p style={{ ...mono, fontSize:11, color:T.t3, margin:0, letterSpacing:1 }}>
+          ⏳ IRIS is generating your policy summary... this takes ~30–40s
+        </p>
+      </div>
+    </div>
+  );
 
   // ── Upload Zone ───────────────────────────────────────────────────────────
   const UploadZone = () => (
@@ -438,14 +555,15 @@ export default function Dboard({ file, isDark: initDark = true }) {
             </div>
           </div>
           <div style={{ display:'flex', gap:8 }}>
-            {item.analysis && (
               <button
-                onClick={() => { setActiveAnalysis(item.analysis); setActiveTab('home'); }}
+                onClick={() => { 
+                  if (item.analysis) { setActiveAnalysis(item.analysis); setActiveTab('home'); } 
+                  else { fetchSummary(item.id); } 
+                }}
                 style={{ display:'flex', alignItems:'center', gap:6, padding:'7px 14px', borderRadius:10, cursor:'pointer', border:`1px solid ${T.navActiveBrd}`, background:T.navActiveBg, color:T.navActiveClr, ...f, fontSize:12, fontWeight:500, transition:'all .2s' }}
               >
                 <Eye size={13} /> View
               </button>
-            )}
             <button
               onClick={() => setHistory(h => h.filter(x => x.id !== item.id))}
               style={{ width:34, height:34, borderRadius:10, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', background:'transparent', border:`1px solid ${T.cardBorder}`, color:T.t3, transition:'all .2s' }}
@@ -474,23 +592,20 @@ export default function Dboard({ file, isDark: initDark = true }) {
 
         {/* Logo row */}
         <div style={{
-          display:'flex', alignItems:'center',
-          gap: sidebarOpen ? 12 : 0,
+          display:'flex', alignItems:'center', gap:12,
           padding:'20px 16px', borderBottom:`1px solid ${T.headerBorder}`,
-          justifyContent: sidebarOpen ? 'flex-start' : 'center',
         }}>
-          {sidebarOpen && <IrisAvatar size={38} />}
+          <IrisAvatar size={38} />
           {sidebarOpen && (
             <div>
-              <p style={{ ...bbs, fontSize:28, letterSpacing:2, color:T.t1, margin:0, lineHeight:1 }}>PolicyLens</p>
+              <p style={{ ...bbs, fontSize:28, letterSpacing:2, color:T.t1, margin:0, lineHeight:1 }}>IRIS</p>
               <p style={{ ...mono, fontSize:9, color:T.t3, margin:'2px 0 0 0', letterSpacing:1 }}>POLICY INTELLIGENCE</p>
             </div>
           )}
           <button
             onClick={() => setSidebarOpen(v => !v)}
             style={{
-              marginLeft: sidebarOpen ? 'auto' : 0,
-              width:30, height:30, borderRadius:8, cursor:'pointer',
+              marginLeft:'auto', width:30, height:30, borderRadius:8, cursor:'pointer',
               display:'flex', alignItems:'center', justifyContent:'center',
               background:'transparent', border:`1px solid ${T.cardBorder}`, color:T.t3,
               transition:'all .2s', flexShrink:0,
@@ -512,7 +627,10 @@ export default function Dboard({ file, isDark: initDark = true }) {
               {history.map(item => (
                 <button
                   key={item.id}
-                  onClick={() => { if (item.analysis) { setActiveAnalysis(item.analysis); setActiveTab('home'); } }}
+                  onClick={() => { 
+                    if (item.analysis) { setActiveAnalysis(item.analysis); setActiveTab('home'); } 
+                    else { fetchSummary(item.id); } 
+                  }}
                   style={{ display:'flex', alignItems:'flex-start', gap:10, padding:'10px 12px', borderRadius:10, cursor:'pointer', background:'transparent', border:'1px solid transparent', textAlign:'left', transition:'all .2s', width:'100%' }}
                   onMouseEnter={e => e.currentTarget.style.background = T.navHoverBg}
                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
@@ -564,12 +682,13 @@ export default function Dboard({ file, isDark: initDark = true }) {
             </h1>
             <p style={{ ...mono, fontSize:11, color:T.t3, margin:'3px 0 0 0' }}>
               {activeTab === 'home'
-                ? activeAnalysis ? `Viewing: ${activeAnalysis.policy_name}` : 'Upload a policy document to begin'
+                ? summaryLoading ? 'Generating summary with IRIS...'
+                : activeAnalysis ? `Viewing: ${activeAnalysis.policy_name}` : 'Upload a policy document to begin'
                 : `${history.length} document${history.length !== 1 ? 's' : ''} analyzed`}
             </p>
           </div>
 
-          {/* Header upload button — always visible */}
+          {/* Header upload button */}
           <label htmlFor="hdr-upload" style={{
             display:'flex', alignItems:'center', gap:8, padding:'10px 20px', borderRadius:12, cursor:'pointer',
             background:T.accGrad, border:'none', color: dark ? '#0c0908' : '#ffffff',
@@ -589,31 +708,33 @@ export default function Dboard({ file, isDark: initDark = true }) {
         {/* Scrollable content */}
         <div className="cb-scrollbar" style={{ flex:1, overflowY:'auto', padding:28, display:'flex', flexDirection:'column', gap:24, background:T.pageBg, transition:'background .4s' }}>
 
-          {/* FIX 2: Only show full upload zone when no analysis is loaded */}
-          {!activeAnalysis && <UploadZone />}
+          {/* Only show upload zone when no analysis and not loading */}
+          {!activeAnalysis && !summaryLoading && <UploadZone />}
 
           {/* Home tab */}
           {activeTab === 'home' && (
-            activeAnalysis
-              ? renderAnalysis(activeAnalysis)
-              : (
-                <div className="fade-in" style={{ borderRadius:24, padding:'72px 24px', textAlign:'center', background:T.cardBg, border:`1px solid ${T.cardBorder}`, boxShadow:T.cardShadow, display:'flex', flexDirection:'column', alignItems:'center', gap:20 }}>
-                  <div style={{ width:80, height:80, borderRadius:24, display:'flex', alignItems:'center', justifyContent:'center', background:T.accGrad, boxShadow:`0 0 40px ${dark ? 'rgba(34,211,238,.2)' : 'rgba(13,148,136,.2)'}` }}>
-                    <Aperture size={38} color={dark ? '#0c0908' : '#ffffff'} />
+            summaryLoading
+              ? <SummarySkeleton />
+              : activeAnalysis
+                ? renderAnalysis(activeAnalysis)
+                : (
+                  <div className="fade-in" style={{ borderRadius:24, padding:'72px 24px', textAlign:'center', background:T.cardBg, border:`1px solid ${T.cardBorder}`, boxShadow:T.cardShadow, display:'flex', flexDirection:'column', alignItems:'center', gap:20 }}>
+                    <div style={{ width:80, height:80, borderRadius:24, display:'flex', alignItems:'center', justifyContent:'center', background:T.accGrad, boxShadow:`0 0 40px ${dark ? 'rgba(34,211,238,.2)' : 'rgba(13,148,136,.2)'}` }}>
+                      <Aperture size={38} color={dark ? '#0c0908' : '#ffffff'} />
+                    </div>
+                    <div>
+                      <h2 style={{ ...bbs, fontSize:48, letterSpacing:2, color:T.t1, margin:'0 0 8px 0', lineHeight:1 }}>READY TO ANALYZE</h2>
+                      <p style={{ ...f, fontSize:14, color:T.t3, margin:0, maxWidth:420 }}>
+                        Upload an insurance policy document above. IRIS will extract and structure every clause, benefit, exclusion, and condition for you.
+                      </p>
+                    </div>
+                    <div style={{ display:'flex', gap:10, flexWrap:'wrap', justifyContent:'center', marginTop:8 }}>
+                      {['Policy Details','Key Benefits','Exclusions','Death Benefit','Tax & Loans','Important Conditions'].map(tag => (
+                        <span key={tag} style={{ padding:'6px 14px', borderRadius:20, background:T.accBg, border:`1px solid ${T.cardBorder}`, ...mono, fontSize:11, color:T.acc, fontWeight:500 }}>{tag}</span>
+                      ))}
+                    </div>
                   </div>
-                  <div>
-                    <h2 style={{ ...bbs, fontSize:48, letterSpacing:2, color:T.t1, margin:'0 0 8px 0', lineHeight:1 }}>READY TO ANALYZE</h2>
-                    <p style={{ ...f, fontSize:14, color:T.t3, margin:0, maxWidth:420 }}>
-                      Upload an insurance policy document above. IRIS will extract and structure every clause, benefit, exclusion, and condition for you.
-                    </p>
-                  </div>
-                  <div style={{ display:'flex', gap:10, flexWrap:'wrap', justifyContent:'center', marginTop:8 }}>
-                    {['Policy Details','Key Benefits','Exclusions','Death Benefit','Tax & Loans','Important Conditions'].map(tag => (
-                      <span key={tag} style={{ padding:'6px 14px', borderRadius:20, background:T.accBg, border:`1px solid ${T.cardBorder}`, ...mono, fontSize:11, color:T.acc, fontWeight:500 }}>{tag}</span>
-                    ))}
-                  </div>
-                </div>
-              )
+                )
           )}
 
           {/* History tab */}
