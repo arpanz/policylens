@@ -52,7 +52,9 @@ router.post('/ingest/upload', authMiddleware, upload.single('file'), async (req,
       status: 'processing',
     });
 
-    // 5. Forward PDF to Python as multipart
+    // 5. Forward PDF to Python as multipart — fire-and-forget so Node doesn't hang
+    // Python runs ingestion in background; we just need it to accept the file.
+    // We do NOT await this — LlamaParse takes 60-120s and would block the response.
     const form = new FormData();
     form.append('file', file.buffer, {
       filename: file.originalname,
@@ -61,27 +63,24 @@ router.post('/ingest/upload', authMiddleware, upload.single('file'), async (req,
     form.append('policy_id', policy_id);
     form.append('overwrite', 'false');
 
-    // Forward to Python — wait for response to surface errors
     console.log(`[ingest] Forwarding to Python: ${process.env.PYTHON_API_URL}/ingest/upload | policy_id=${policy_id}`);
-    
-    try {
-      const pythonResp = await axios.post(`${process.env.PYTHON_API_URL}/ingest/upload`, form, {
-        headers: form.getHeaders(),
-        maxBodyLength: Infinity,
-        maxContentLength: Infinity,
-      });
-      console.log('[ingest] Python accepted upload:', pythonResp.data);
-    } catch (err) {
+
+    axios.post(`${process.env.PYTHON_API_URL}/ingest/upload`, form, {
+      headers: form.getHeaders(),
+      maxBodyLength: Infinity,
+      maxContentLength: Infinity,
+      timeout: 15000, // 15s — enough for Python to accept file and start background task
+    }).then(resp => {
+      console.log('[ingest] Python accepted upload:', resp.data);
+    }).catch(err => {
       console.error('[ingest] Python ingest error:', err.message);
       if (err.response) {
         console.error('[ingest] Python response status:', err.response.status);
         console.error('[ingest] Python response body:', JSON.stringify(err.response.data));
-        throw new Error(`Python API Error: ${err.response.status} - ${JSON.stringify(err.response.data)}`);
       }
-      throw new Error(`Failed to reach Python API: ${err.message}`);
-    }
+    });
 
-    // 6. Return response
+    // 6. Return immediately — frontend polls /ingest/status/:policy_id for progress
     res.json({
       status: 'processing',
       policy_id,
