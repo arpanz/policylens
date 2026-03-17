@@ -3,6 +3,7 @@ import {
   UploadCloud, FileText, X, ShieldCheck, HelpCircle,
   CheckCircle2, Loader, Cpu, Zap, Lock, Eye, Sun, Moon, AlertTriangle
 } from 'lucide-react';
+import { fetchApi } from '../../api';
 
 /* ── fonts + keyframes ──────────────────────────────────── */
 const FONT_LINK =
@@ -215,6 +216,7 @@ export default function UploadModal({ onUploadComplete, onCancel }) {
   const [pct,    setPct]    = useState(0);
   const [stage,  setStage]  = useState(-1);
   const [dark,   setDark]   = useState(false);
+  const [backendMsg, setBackendMsg] = useState("");
 
   const fileRef = useRef(null);
   const dragCounter = useRef(0);
@@ -232,21 +234,55 @@ export default function UploadModal({ onUploadComplete, onCancel }) {
   const stageRef = useRef(-1);
   useEffect(() => {
     if (status !== 'uploading') return;
-    setPct(0); setStage(0); stageRef.current = 0;
-    const id = setInterval(() => {
-      setPct(p => {
-        const n = p + (p < 50 ? 2.8 : p < 78 ? 1.5 : 0.5);
-        if (n >= 25 && stageRef.current < 1) { stageRef.current = 1; setStage(1); }
-        if (n >= 55 && stageRef.current < 2) { stageRef.current = 2; setStage(2); }
-        if (n >= 80 && stageRef.current < 3) { stageRef.current = 3; setStage(3); }
-        if (n >= 100) { clearInterval(id); return 100; }
-        return n;
-      });
-    }, 60);
-    return () => clearInterval(id);
-  }, [status]);
+    setPct(5); setStage(0); stageRef.current = 0;
+    let pollId;
+
+    const startUpload = async () => {
+      try {
+        const fd = new FormData();
+        fd.append('file', file);
+        const data = await fetchApi('/ingest/upload', {
+          method: 'POST',
+          body: fd
+        });
+        const pid = data.policy_id;
+        setPct(20);
+
+        pollId = setInterval(async () => {
+          try {
+            const sData = await fetchApi(`/ingest/status/${pid}`);
+            console.log('[DEBUG] Poll status:', sData);
+            
+            if (sData.progress !== undefined) {
+              setPct(sData.progress);
+            }
+            if (sData.message) {
+              setBackendMsg(sData.message);
+            }
+
+            if (sData.status === 'ready') {
+              clearInterval(pollId);
+              setPct(100);
+            }
+          } catch(e) {
+            console.error('[POLL ERROR]', e);
+          }
+        }, 2000);
+
+      } catch (err) {
+        setStatus('idle');
+        setError('Upload failed: ' + err.message);
+      }
+    };
+    startUpload();
+
+    return () => { if (pollId) clearInterval(pollId); };
+  }, [status, file]);
 
   useEffect(() => {
+    if (pct >= 25 && stageRef.current < 1) { stageRef.current = 1; setStage(1); }
+    if (pct >= 55 && stageRef.current < 2) { stageRef.current = 2; setStage(2); }
+    if (pct >= 80 && stageRef.current < 3) { stageRef.current = 3; setStage(3); }
     if (pct >= 100 && status === 'uploading')
       setTimeout(() => { setStatus('done'); setTimeout(() => onUploadComplete(file), 800); }, 250);
   }, [pct, status, file, onUploadComplete]);
@@ -294,6 +330,7 @@ export default function UploadModal({ onUploadComplete, onCancel }) {
   const mono  = { fontFamily: "'JetBrains Mono', monospace" };
 
   const getProgressText = () => {
+    if (backendMsg) return backendMsg;
     if (pct < 25) return "Parsing contract structure...";
     if (pct < 55) return "Extracting key entities & dates...";
     if (pct < 85) return "Running risk analysis models...";

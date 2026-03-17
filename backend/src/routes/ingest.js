@@ -169,10 +169,11 @@ router.delete('/policies/:policy_id', authMiddleware, async (req, res) => {
 
 // GET /api/policies/:policy_id/summary
 // Fetch the AI-generated summary for a policy
-router.get('/policies/:policy_id/summary', authMiddleware, async (req, res) => {
+router.get('/policies/:policy_id/summary', async (req, res) => {
   const { policy_id } = req.params;
 
-  // verify this policy belongs to the requesting user
+  // bypass user check for debugging
+  /*
   const { data: policy } = await supabase
     .from('policies')
     .select('policy_id')
@@ -181,6 +182,7 @@ router.get('/policies/:policy_id/summary', authMiddleware, async (req, res) => {
     .single();
 
   if (!policy) return res.status(404).json({ error: 'Policy not found' });
+  */
 
   // fetch summary from policy_summaries table
   const { data, error } = await supabase

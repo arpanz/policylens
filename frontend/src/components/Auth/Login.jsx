@@ -115,6 +115,8 @@ function getStrength(pw) {
   return { score: s, ...map[s] };
 }
 
+import { fetchApi } from '../../api';
+
 /* ── SIGNUP MODAL ─────────────────────────────────────────────── */
 function SignupModal({ dark, T, onClose, onSuccess }) {
   const [name,      setName]      = useState('');
@@ -154,17 +156,14 @@ function SignupModal({ dark, T, onClose, onSuccess }) {
     setError('');
     setLoading(true);
     try {
-      /* ── connect your backend here ──────────────────────────
-         const res = await fetch('/api/auth/register', {
-           method: 'POST',
-           headers: { 'Content-Type': 'application/json' },
-           body: JSON.stringify({ name, email, password }),
-         });
-         if (!res.ok) throw new Error((await res.json()).message || 'Registration failed');
-      ─────────────────────────────────────────────────────── */
-      await new Promise(r => setTimeout(r, 1500));
+      const data = await fetchApi('/auth/signup', {
+        method: 'POST',
+        body: { name, email, password }
+      });
+      console.log('Signup successful:', data);
+      localStorage.setItem('token', data.token);
       setDone(true);
-      setTimeout(() => { onSuccess?.({ name, email }); onClose(); }, 2600);
+      setTimeout(() => { onSuccess?.({ name, email }); onClose(); }, 2000);
     } catch (err) {
       triggerError(err.message || 'Registration failed. Please try again.');
     } finally {
@@ -537,7 +536,12 @@ export default function LoginPage({ onLoginSuccess, onNavigateSignup, onBack }) 
     setError('');
     setLoading(true);
     try {
-      await new Promise(r => setTimeout(r, 1400));
+      const data = await fetchApi('/auth/login', {
+        method: 'POST',
+        body: { email, password }
+      });
+      localStorage.setItem('token', data.token);
+      console.log('Login successful:', data);
       onLoginSuccess?.({ email });
     } catch (err) {
       triggerError(err.message || 'Invalid credentials. Please try again.');

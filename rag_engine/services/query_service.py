@@ -72,6 +72,42 @@ class QueryService:
         )
         return result
 
+    def stream_query(
+        self,
+        question: str,
+        policy_id: str,
+        k: int = 8,
+        top_k_rerank: int = 5,
+    ):
+        """Answer *question* via stream using chunks from *policy_id*."""
+        logger.info(
+            "QueryService.stream_query START | policy_id=%s | q='%s'",
+            policy_id,
+            question[:60],
+        )
+
+        # Step 1 — retrieve
+        raw_results = self._retriever.retrieve(question, policy_id, k=k)
+
+        # Step 2 — rerank
+        reranked = self._reranker.rerank(question, raw_results, top_k=top_k_rerank)
+
+        # Step 3 — build context
+        context = self._context_builder.build(reranked)
+
+        # Step 4 — build prompt
+        from rag_engine.prompts.context_template import build_query_prompt
+        from rag_engine.prompts.system_prompt import SYSTEM_PROMPT
+
+        prompt = build_query_prompt(question, context, policy_id)
+
+        # Step 5 — LLM Stream
+        # We yield tokens. At the very end, we might want to yield a JSON with sources.
+        # For simplicity in this first version, we'll yield tokens.
+        # A more advanced version would use Server-Sent Events (SSE).
+        for token in self._llm.stream(prompt, system=SYSTEM_PROMPT):
+            yield token
+
     # ------------------------------------------------------------------ #
     #  multi-policy query
     # ------------------------------------------------------------------ #

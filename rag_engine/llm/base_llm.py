@@ -20,6 +20,16 @@ class BaseLLM(ABC):
         """Send a full message list and return the assistant response."""
         ...
 
+    @abstractmethod
+    def stream(self, prompt: str, system: str | None = None):
+        """Yield tokens from a single user prompt (with optional system message)."""
+        ...
+
+    @abstractmethod
+    def stream_with_messages(self, messages: list[dict]):
+        """Yield tokens from a full message list."""
+        ...
+
     @property
     @abstractmethod
     def model_id(self) -> str:
