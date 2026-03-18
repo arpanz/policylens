@@ -16,13 +16,23 @@ def get_llm(
 ) -> BaseLLM:
     """Instantiate an LLM by *provider* name.
 
-    Falls back to ``settings.llm_provider`` (default ``"kimi"``).
+    Falls back to ``settings.llm_provider`` (default ``"gemini"``).
     Optional max_tokens overrides the default (4096) when provided.
     Optional model overrides settings.llm_model when provided.
     """
     provider = (provider or settings.llm_provider).lower().strip()
 
-    if provider == "kimi":
+    if provider == "gemini":
+        from .gemini_llm import GeminiLLM
+
+        kwargs = {}
+        if max_tokens:
+            kwargs["max_tokens"] = max_tokens
+        if model:
+            kwargs["model"] = model
+        llm = GeminiLLM(**kwargs)
+
+    elif provider == "kimi":
         from .kimi_llm import KimiLLM
 
         kwargs = {}
@@ -45,15 +55,15 @@ def get_llm(
 
     else:
         logger.warning(
-            "Unknown llm_provider '%s' — falling back to Kimi", provider
+            "Unknown llm_provider '%s' — falling back to Gemini", provider
         )
-        from .kimi_llm import KimiLLM
+        from .gemini_llm import GeminiLLM
         kwargs = {}
         if max_tokens:
             kwargs["max_tokens"] = max_tokens
         if model:
             kwargs["model"] = model
-        llm = KimiLLM(**kwargs)
+        llm = GeminiLLM(**kwargs)
 
     logger.info(
         "LLM instantiated: %s (provider=%s, model=%s, max_tokens=%s)",
