@@ -8,9 +8,10 @@ import Dboard from "./components/Dashboard/Dboard";
 import Chatbot from "./components/Dashboard/Chatbot";
 
 export default function App() {
-  const [isDark, setIsDark] = useState(false);
-  const [appState, setAppState] = useState('home');
-  const [userName, setUserName] = useState('');
+  const [isDark,           setIsDark]           = useState(false);
+  const [appState,         setAppState]         = useState('home');
+  const [userName,         setUserName]         = useState('');
+  const [initialPolicyId,  setInitialPolicyId]  = useState(null);
 
   useEffect(() => {
     console.log("Current App State:", appState);
@@ -41,11 +42,11 @@ export default function App() {
 
   const toggleTheme = () => setIsDark(!isDark);
 
-  const handleUploadComplete = () => {
-    // UploadModal already completed the upload — just navigate to dashboard.
-    // Previously we stored the file and passed it to Dboard as a prop, which
-    // caused Dboard's mount effect to call processFile() a second time.
-    console.log("Upload finished! Routing to Dboard...");
+  const handleUploadComplete = (_file, policyId) => {
+    // UploadModal already completed the upload — store the policyId so Dboard
+    // can call fetchSummary on mount, then navigate to dashboard.
+    console.log("Upload finished! Routing to Dboard with policyId:", policyId);
+    setInitialPolicyId(policyId);
     navigateTo('dboard');
   };
 
@@ -56,8 +57,10 @@ export default function App() {
         isDark={isDark}
         toggleTheme={toggleTheme}
         userName={userName}
+        initialPolicyId={initialPolicyId}
         onLogout={() => {
           setUserName('');
+          setInitialPolicyId(null);
           navigateTo('home');
         }}
         onTriggerUpload={() => navigateTo('upload')}
