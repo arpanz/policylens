@@ -255,7 +255,7 @@ export default function App() {
         {appState === 'upload' && (
           <UploadModal
             onUploadComplete={handleUploadComplete}
-            onCancel={() => navigateTo('home')}
+            onCancel={() => navigateTo('dboard')}
           />
         )}
       </main>
