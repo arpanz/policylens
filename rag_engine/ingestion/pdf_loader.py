@@ -51,23 +51,18 @@ class PDFLoader:
         num_pages = len(doc)
         doc.close()
 
+        all_pages = pymupdf4llm.to_markdown(
+        str(pdf_path),
+        pages=list(range(num_pages)),
+        page_chunks=True,  # returns list of dicts, one per page
+    )
+
         parts = []
-        for page_num in range(1, num_pages + 1):
-            # Parse one page at a time to preserve page boundaries
-            page_md = pymupdf4llm.to_markdown(
-                str(pdf_path),
-                pages=[page_num - 1],  # pymupdf uses 0-based page index
-            )
-            parts.append(f"---PAGE_START:{page_num}---\n{page_md}")
+        for i, page_data in enumerate(all_pages, start=1):
+            parts.append(f"---PAGE_START:{i}---\n{page_data['text']}")
 
         raw_markdown = "\n\n".join(parts)
-
-        logger.info(
-            "pymupdf4llm parsed %d page(s) | %s chars",
-            num_pages,
-            f"{len(raw_markdown):,}",
-        )
-
+        logger.info("pymupdf4llm parsed %d page(s) | %s chars", num_pages, f"{len(raw_markdown):,}")
         return raw_markdown
 
     def load_from_bytes(
