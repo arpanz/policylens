@@ -10,13 +10,15 @@ class Settings(BaseSettings):
 
     # required — will error if missing
     llama_cloud_api_key: str
-    moonshot_api_key: str
     supabase_url: str
     supabase_service_key: str
 
-    # kimi / moonshot
-    # moonshot-v1-8k = fast (5-8s), reliable, not overloaded
-    # kimi-k2.5 = slow reasoning model (30-40s), avoid for production
+    # gemini
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-2.0-flash-exp"
+
+    # kimi / moonshot (kept for fallback, no longer required)
+    moonshot_api_key: str = ""
     kimi_base_url: str = "https://api.moonshot.ai/v1"
     kimi_model: str = "moonshot-v1-8k"
 
@@ -35,8 +37,8 @@ class Settings(BaseSettings):
     embedding_dimension: int = 768
 
     # llm
-    llm_provider: str = "kimi"
-    llm_model: str = "moonshot-v1-8k"
+    llm_provider: str = "gemini"
+    llm_model: str = "gemini-2.0-flash-exp"
 
     # reranker
     reranker_provider: str = "cross_encoder"
