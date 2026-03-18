@@ -71,6 +71,7 @@ export default function App() {
       if (!isPersonalEmailAllowed(email)) {
         await supabase.auth.signOut();
         localStorage.removeItem('token');
+        localStorage.removeItem('oauth_redirect_intent');
         setUserName('');
         setAuthError(PERSONAL_EMAIL_ERROR);
         redirectToLogin();
@@ -83,6 +84,8 @@ export default function App() {
 
     const syncSession = async (session, event = 'INITIAL_SESSION') => {
       if (!session?.user?.email) {
+        // Clear stale OAuth intent when auth did not complete (cancel/error/blocked).
+        localStorage.removeItem('oauth_redirect_intent');
         if (event === 'SIGNED_OUT') {
           lastOAuthSyncKey.current = '';
           setUserName('');
@@ -119,6 +122,7 @@ export default function App() {
       } catch (err) {
         console.error('OAuth session sync failed:', err);
         localStorage.removeItem('token');
+        localStorage.removeItem('oauth_redirect_intent');
         await supabase.auth.signOut();
         setUserName('');
         setAuthError('Google sign-in failed on server sync. Please try again.');
