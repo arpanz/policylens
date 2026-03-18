@@ -1,4 +1,4 @@
-// src/components/Dashboard/Dboard.jsx  ── FULL VERSION (frontend + backend)
+// src/components/Dashboard/Dboard.jsx
 import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Upload, Clock, X, FileText, AlertTriangle, CheckCircle2,
@@ -6,7 +6,6 @@ import {
   Home, Aperture, Sun, Moon, Menu, BadgeCheck, Banknote,
   RefreshCw, Send, Loader2,
 } from 'lucide-react';
-import UploadModal from './UploadModal';
 import { fetchApi, streamApi } from '../../api';
 
 const FONT_LINK =
@@ -18,12 +17,15 @@ const KEYFRAMES = `
   @keyframes cb-pulse { 0%,100%{opacity:.4;transform:scale(1)} 50%{opacity:1;transform:scale(1.2)} }
   @keyframes iris-spin { 0%{transform:rotate(0deg)} 100%{transform:rotate(360deg)} }
   @keyframes fadeIn { from{opacity:0;transform:scale(.97)} to{opacity:1;transform:scale(1)} }
+  @keyframes shimmer { 0%{background-position:-400px 0} 100%{background-position:400px 0} }
   .cb-db1{animation:cb-db 1.2s infinite 0ms}
   .cb-db2{animation:cb-db 1.2s infinite 150ms}
   .cb-db3{animation:cb-db 1.2s infinite 300ms}
   .cb-msg{animation:cb-slideUp .25s cubic-bezier(0.16,1,0.3,1)}
   .iris-spinner{animation:iris-spin 0.9s linear infinite}
   .fade-in{animation:fadeIn .3s cubic-bezier(0.16,1,0.3,1)}
+  .skeleton{animation:shimmer 1.4s infinite linear;background:linear-gradient(90deg,#e5e7eb 25%,#f3f4f6 50%,#e5e7eb 75%);background-size:400px 100%;}
+  .skeleton-dark{animation:shimmer 1.4s infinite linear;background:linear-gradient(90deg,#1a1310 25%,#231a15 50%,#1a1310 75%);background-size:400px 100%;}
   .cb-scrollbar::-webkit-scrollbar{width:5px}
   .cb-scrollbar::-webkit-scrollbar-thumb{border-radius:5px}
 `;
@@ -78,6 +80,7 @@ const DARK = {
   divider:'#1a1310',
 };
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
 const makeWelcomeMsg = (policyName) => ({
   id: Date.now(),
   sender: 'ai',
@@ -86,51 +89,91 @@ const makeWelcomeMsg = (policyName) => ({
     : "Hello, I'm IRIS. Upload an insurance policy and I'll analyze every clause, benefit, and exclusion for you.",
 });
 
-function UploadZone({ T, dark, isDragging, onDragOver, onDragLeave, onDrop, onClick, onChoose }) {
+// ─────────────────────────────────────────────────────────────────────────────
+// UploadZone MUST live at module scope — not inside Dboard.
+// If defined inside, React sees a new component type on every render and
+// unmounts/remounts the spinner div each tick, resetting the CSS animation.
+// ─────────────────────────────────────────────────────────────────────────────
+function UploadZone({ T, dark, isDragging, uploading, uploadPct, onDragOver, onDragLeave, onDrop, onZoneClick, onChoose }) {
   const syne = { fontFamily:"'Syne', sans-serif" };
+  const mono = { fontFamily:"'JetBrains Mono', monospace" };
   const f    = { fontFamily:"'DM Sans', sans-serif" };
   return (
     <div
-      onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop} onClick={onClick}
-      style={{ borderRadius:20, padding:'52px 24px', border:`2px dashed ${isDragging ? T.acc : T.cardBorder}`, background: isDragging ? T.accBg : T.headerBg, cursor:'pointer', transition:'all .3s', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:20, textAlign:'center' }}
+      onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}
+      onClick={onZoneClick}
+      style={{
+        borderRadius:20, padding:'52px 24px',
+        border:`2px dashed ${isDragging ? T.acc : T.cardBorder}`,
+        background: isDragging ? T.accBg : T.headerBg,
+        cursor: uploading ? 'default' : 'pointer', transition:'all .3s',
+        display:'flex', flexDirection:'column',
+        alignItems:'center', justifyContent:'center',
+        gap:20, textAlign:'center',
+      }}
     >
-      <div style={{ width:64, height:64, borderRadius:18, flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center', background:T.accBg, border:`1px solid ${T.cardBorder}` }}>
-        <Upload size={28} style={{ color:T.acc }} />
-      </div>
-      <div>
-        <p style={{ ...syne, fontSize:16, fontWeight:600, color:T.t1, margin:'0 0 4px 0' }}>Upload your insurance policy</p>
-        <p style={{ ...f, fontSize:13, color:T.t3, margin:0 }}>Drag & drop or click to browse · PDF, DOC up to 20MB</p>
-      </div>
-      <button
-        onClick={e => { e.stopPropagation(); onChoose(); }}
-        style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 26px', borderRadius:12, border:'none', background:T.accGrad, cursor:'pointer', color: dark ? '#0c0908' : '#ffffff', ...syne, fontSize:14, fontWeight:600, boxShadow:T.msgUserShadow, marginTop:4 }}
-      >
-        <FilePlus size={16} /> Choose File
-      </button>
+      {uploading ? (
+        <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:14, width:'100%' }}>
+          {/* Stable DOM node — animation runs uninterrupted because UploadZone never remounts */}
+          <div className="iris-spinner" style={{ width:40, height:40, borderRadius:'50%', borderWidth:3, borderStyle:'solid', borderColor:T.cardBorder, borderTopColor:T.acc }} />
+          <p style={{ ...syne, fontSize:15, fontWeight:600, color:T.t1, margin:0 }}>Analyzing policy with IRIS…</p>
+          <div style={{ width:'100%', maxWidth:320, height:4, borderRadius:4, background:T.cardBorder }}>
+            <div style={{ height:'100%', borderRadius:4, background:T.accGrad, width:`${uploadPct}%`, transition:'width .15s' }} />
+          </div>
+          <p style={{ ...mono, fontSize:11, color:T.t3, margin:0 }}>{Math.round(uploadPct)}% — Running ML pipeline</p>
+        </div>
+      ) : (
+        <>
+          <div style={{ width:64, height:64, borderRadius:18, flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center', background:T.accBg, border:`1px solid ${T.cardBorder}` }}>
+            <Upload size={28} style={{ color:T.acc }} />
+          </div>
+          <div>
+            <p style={{ ...syne, fontSize:16, fontWeight:600, color:T.t1, margin:'0 0 4px 0' }}>Upload your insurance policy</p>
+            <p style={{ ...f, fontSize:13, color:T.t3, margin:0 }}>Drag & drop or click to browse · PDF, DOC up to 20MB</p>
+          </div>
+          <button
+            onClick={e => { e.stopPropagation(); onChoose(); }}
+            style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 26px', borderRadius:12, border:'none', background:T.accGrad, cursor:'pointer', color: dark ? '#0c0908' : '#ffffff', ...syne, fontSize:14, fontWeight:600, boxShadow:T.msgUserShadow, marginTop:4 }}
+          >
+            <FilePlus size={16} /> Choose File
+          </button>
+        </>
+      )}
     </div>
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
 export default function Dboard({ file, isDark: _initDark, userName = 'My Account', initialPolicyId = null }) {
+  // Always boot light — user can toggle via sidebar
   const [dark,            setDark]           = useState(false);
   const [sidebarOpen,     setSidebarOpen]    = useState(true);
   const [activeTab,       setActiveTab]      = useState('home');
   const [history,         setHistory]        = useState([]);
   const [activeAnalysis,  setActiveAnalysis] = useState(null);
-  const [activePolicyId,  setActivePolicyId] = useState('default');
+  const [activePolicyId,  setActivePolicyId] = useState('default');  // FIX 2
+  const [loadingPolicyId, setLoadingPolicyId] = useState(null);       // FIX 3
+  const [summaryLoading,  setSummaryLoading] = useState(false);
   const [isDragging,      setIsDragging]     = useState(false);
+  const [uploading,       setUploading]      = useState(false);
+  const [uploadPct,       setUploadPct]      = useState(0);
   const [chatOpen,        setChatOpen]       = useState(false);
   const [chatInput,       setChatInput]      = useState('');
   const [isTyping,        setIsTyping]       = useState(false);
-  const [showUploadModal, setShowUploadModal] = useState(false);
-  const [loadingPolicyId, setLoadingPolicyId] = useState(null);
+  // FIX 4: per-policy chat map instead of a single flat array
   const [chatMessagesMap, setChatMessagesMap] = useState({
     default: [makeWelcomeMsg(file?.name ?? null)],
   });
 
-  const chatEnd          = useRef(null);
+  // ── Refs ──────────────────────────────────────────────────────────────────
+  const fileInputRef    = useRef(null);  // ONE shared file input for both zone + header
+  const chatEnd         = useRef(null);
+  const summaryPollRef  = useRef(null);
+  const isProcessingRef = useRef(false); // guard against duplicate processFile calls
   const hasAutoProcessed = useRef(false);
-  const chatMessages     = chatMessagesMap[activePolicyId] ?? chatMessagesMap['default'];
+
+  // Derive current chat thread from active policy
+  const chatMessages = chatMessagesMap[activePolicyId] ?? chatMessagesMap['default'];
 
   const T    = dark ? DARK : LIGHT;
   const f    = { fontFamily:"'DM Sans', sans-serif" };
@@ -138,6 +181,12 @@ export default function Dboard({ file, isDark: _initDark, userName = 'My Account
   const bbs  = { fontFamily:"'Bebas Neue', cursive" };
   const mono = { fontFamily:"'JetBrains Mono', monospace" };
 
+  // FIX 1: openFilePicker — was called everywhere but never defined
+  const openFilePicker = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  // ── Font / keyframes injection ────────────────────────────────────────────
   useEffect(() => {
     const link  = Object.assign(document.createElement('link'),  { rel:'stylesheet', href:FONT_LINK });
     const style = Object.assign(document.createElement('style'), { textContent:KEYFRAMES });
@@ -145,10 +194,101 @@ export default function Dboard({ file, isDark: _initDark, userName = 'My Account
     return () => { link.remove(); style.remove(); };
   }, []);
 
+  // ── Clear summary poll on unmount ─────────────────────────────────────────
+  useEffect(() => {
+    return () => { if (summaryPollRef.current) clearInterval(summaryPollRef.current); };
+  }, []);
+
+  // ── Auto-scroll chat ──────────────────────────────────────────────────────
   useEffect(() => {
     chatEnd.current?.scrollIntoView({ behavior:'smooth' });
   }, [chatMessages, isTyping]);
 
+  // ── Load history on mount ─────────────────────────────────────────────────
+  const loadHistory = useCallback(async () => {
+    try {
+      const data = await fetchApi('/policies');
+      setHistory(data.map(item => ({
+        id:          item.policy_id,
+        filename:    item.policy_name ?? item.filename,
+        date:        new Date(item.created_at).toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' }),
+        policy_type: item.policy_type ?? 'Detected',
+        insurer:     item.insurer     ?? 'PolicyLens AI',
+        analysis:    null,
+      })));
+    } catch (err) {
+      console.error('Failed to load history:', err);
+    }
+  }, []);
+
+  // ── Poll for summary after ingest completes (up to 2 min) ────────────────
+  const pollForSummary = useCallback((policy_id) => {
+    setSummaryLoading(true);
+    setActivePolicyId(policy_id);
+    setActiveTab('home');
+    setActiveAnalysis(null);
+    let attempts = 0;
+    const MAX = 20; // 20 × 6s = 2 min max
+
+    if (summaryPollRef.current) clearInterval(summaryPollRef.current);
+
+    summaryPollRef.current = setInterval(async () => {
+      attempts++;
+      try {
+        const data = await fetchApi(`/policies/${policy_id}/summary`);
+        if (data?.summary) {
+          clearInterval(summaryPollRef.current);
+          setSummaryLoading(false);
+          const displayName = data.summary.policy_name ?? data.summary.filename ?? String(policy_id);
+          setActiveAnalysis(data.summary);
+          setHistory(h => h.map(x =>
+            x.id === policy_id ? { ...x, filename: displayName, analysis: data.summary } : x
+          ));
+          setChatMessagesMap(prev =>
+            prev[policy_id] ? prev : { ...prev, [policy_id]: [makeWelcomeMsg(displayName)] }
+          );
+        }
+      } catch {
+        // 404 = still generating — keep polling
+        if (attempts >= MAX) {
+          clearInterval(summaryPollRef.current);
+          setSummaryLoading(false);
+          console.error('Summary polling timed out for', policy_id);
+        }
+      }
+    }, 6000);
+  }, []);
+
+  // ── Fetch summary once (View button) — poll if not ready yet ─────────────
+  const fetchSummary = useCallback(async (policy_id) => {
+    setLoadingPolicyId(policy_id);
+    setActivePolicyId(policy_id);
+    setActiveTab('home');
+    setActiveAnalysis(null);
+    try {
+      const data = await fetchApi(`/policies/${policy_id}/summary`);
+      if (data?.summary) {
+        const displayName = data.summary.policy_name ?? data.summary.filename ?? String(policy_id);
+        setActiveAnalysis(data.summary);
+        setHistory(h => h.map(x =>
+          x.id === policy_id ? { ...x, filename: displayName, analysis: data.summary } : x
+        ));
+        setChatMessagesMap(prev =>
+          prev[policy_id] ? prev : { ...prev, [policy_id]: [makeWelcomeMsg(displayName)] }
+        );
+      } else {
+        // Summary exists but empty — start polling
+        pollForSummary(policy_id);
+      }
+    } catch {
+      // Not ready yet — start polling
+      pollForSummary(policy_id);
+    } finally {
+      setLoadingPolicyId(null);
+    }
+  }, [pollForSummary]);
+
+  // ── Mount: load history, handle initialPolicyId / file prop ──────────────
   useEffect(() => {
     loadHistory();
     if (initialPolicyId && !hasAutoProcessed.current) {
@@ -161,78 +301,69 @@ export default function Dboard({ file, isDark: _initDark, userName = 'My Account
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Backend: load policy list ─────────────────────────────────────────────
-  const loadHistory = async () => {
+  // ── Upload file directly (no modal) ──────────────────────────────────────
+  // isProcessingRef prevents React StrictMode double-invoke and any accidental
+  // duplicate call from firing two real uploads.
+  const processFile = useCallback(async (pickedFile) => {
+    if (isProcessingRef.current) return;
+    isProcessingRef.current = true;
+    if (fileInputRef.current) fileInputRef.current.value = '';
+
+    setUploading(true);
+    setUploadPct(5);
+
     try {
-      const data = await fetchApi('/policies');
-      setHistory(data.map(item => ({
-        id:          item.policy_id,
-        filename:    item.filename,
-        date:        new Date(item.created_at).toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' }),
-        policy_type: item.policy_type ?? 'Detected',
-        insurer:     item.insurer     ?? 'PolicyLens AI',
-        analysis:    null,
-      })));
+      const fd = new FormData();
+      fd.append('file', pickedFile);
+      const data = await fetchApi('/ingest/upload', { method:'POST', body:fd });
+      const pid  = data.policy_id;
+      setUploadPct(20);
+
+      const poll = setInterval(async () => {
+        try {
+          const sData = await fetchApi(`/ingest/status/${pid}`);
+          if (sData.progress !== undefined) setUploadPct(sData.progress);
+          if (sData.status === 'ready') {
+            clearInterval(poll);
+            setUploadPct(100);
+            setTimeout(() => {
+              setUploading(false);
+              isProcessingRef.current = false;
+              loadHistory();
+              pollForSummary(pid);
+            }, 800);
+          }
+        } catch (e) {
+          console.error('[POLL ERROR]', e);
+        }
+      }, 2000);
     } catch (err) {
-      console.error('Failed to load history:', err);
+      setUploading(false);
+      isProcessingRef.current = false;
+      console.error('Upload failed:', err.message);
     }
-  };
+  }, [loadHistory, pollForSummary]);
 
-  // ── Backend: fetch summary ────────────────────────────────────────────────
-  // useCallback so viewPolicy can safely list it as a dep (no stale closure)
-  const fetchSummary = useCallback(async (policyId) => {
-    setLoadingPolicyId(policyId);
-    // Navigate immediately so user sees feedback right away
-    setActivePolicyId(policyId);
-    setActiveTab('home');
-    setActiveAnalysis(null);
-    try {
-      const data = await fetchApi(`/policies/${policyId}/summary`);
-      if (data?.summary) {
-        const summary     = data.summary;
-        const displayName = summary.policy_name ?? summary.filename ?? String(policyId);
-        setActiveAnalysis(summary);
-        setHistory(h => h.map(x =>
-          x.id === policyId ? { ...x, filename: displayName, analysis: summary } : x
-        ));
-        setChatMessagesMap(prev =>
-          prev[policyId] ? prev : { ...prev, [policyId]: [makeWelcomeMsg(displayName)] }
-        );
-      } else {
-        // Backend returned no summary yet — mark as pending
-        console.warn('Summary not ready for policy:', policyId);
-        setHistory(h => h.map(x =>
-          x.id === policyId ? { ...x, summaryPending: true } : x
-        ));
-      }
-    } catch (err) {
-      console.error('Summary fetch failed:', err);
-      setHistory(h => h.map(x =>
-        x.id === policyId ? { ...x, summaryPending: true } : x
-      ));
-    } finally {
-      setLoadingPolicyId(null);
-    }
-  }, []);
+  // ── File input handler (shared by zone + header button) ──────────────────
+  const handleFileInputChange = useCallback((e) => {
+    const picked = e.target.files?.[0];
+    if (picked) processFile(picked);
+  }, [processFile]);
 
-  // ── Called after UploadModal completes ────────────────────────────────────
-  const processFile = useCallback(async (_file, policyId) => {
-    await loadHistory();
-    await fetchSummary(policyId);
-  }, [fetchSummary]);
-
+  // ── Drag & drop ───────────────────────────────────────────────────────────
   const handleDragOver  = useCallback((e) => { e.preventDefault(); setIsDragging(true); }, []);
   const handleDragLeave = useCallback(() => setIsDragging(false), []);
   const handleDrop      = useCallback((e) => {
     e.preventDefault(); setIsDragging(false);
-    if (e.dataTransfer.files[0]) setShowUploadModal(true);
-  }, []);
-  const handleZoneClick = useCallback(() => setShowUploadModal(true), []);
+    const picked = e.dataTransfer.files?.[0];
+    if (picked) processFile(picked);
+  }, [processFile]);
 
-  // Always navigate immediately; fetch if no cached analysis
+  // ── View policy — always navigate immediately, fetch if not cached ────────
   const viewPolicy = useCallback((item) => {
     setActivePolicyId(item.id);
     setActiveTab('home');
+    // Init chat thread for this policy if one doesn't exist yet
     setChatMessagesMap(prev => {
       if (prev[item.id]) return prev;
       return { ...prev, [item.id]: [makeWelcomeMsg(item.filename)] };
@@ -245,11 +376,13 @@ export default function Dboard({ file, isDark: _initDark, userName = 'My Account
     }
   }, [fetchSummary]);
 
-  // ── Chat: real streaming ──────────────────────────────────────────────────
+  // ── Chat: real streaming per-policy ──────────────────────────────────────
   const sendChat = async () => {
     if (!chatInput.trim() || isTyping) return;
     const text = chatInput;
-    const pid  = activePolicyId !== 'default' ? activePolicyId : (history.length > 0 ? history[0].id : null);
+    const pid  = activePolicyId !== 'default'
+      ? activePolicyId
+      : activeAnalysis?.policy_id ?? (history.length > 0 ? history[0].id : null);
 
     setChatMessagesMap(prev => ({
       ...prev,
@@ -286,7 +419,8 @@ export default function Dboard({ file, isDark: _initDark, userName = 'My Account
     }
   };
 
-  // ── Primitives ────────────────────────────────────────────────────────────
+  // ════════════════════════ SUB-COMPONENTS ══════════════════════════════════
+
   const IrisAvatar = ({ size=40 }) => (
     <div style={{ width:size, height:size, borderRadius:Math.round(size*0.28), flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center', background:T.accGrad, boxShadow:T.msgUserShadow }}>
       <Aperture size={Math.round(size*0.48)} color={dark ? '#0c0908' : '#ffffff'} />
@@ -331,6 +465,43 @@ export default function Dboard({ file, isDark: _initDark, userName = 'My Account
     );
   };
 
+  // ── Skeleton loader (from doc11) ──────────────────────────────────────────
+  const SummarySkeleton = () => (
+    <div className="fade-in" style={{ display:'flex', flexDirection:'column', gap:20 }}>
+      <div style={{ borderRadius:20, padding:'26px 30px', background:T.cardBg, border:`1px solid ${T.cardBorder}`, boxShadow:T.cardShadow }}>
+        <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:12 }}>
+          <div className={dark ? 'skeleton-dark' : 'skeleton'} style={{ height:42, width:280, borderRadius:8 }} />
+          <div className={dark ? 'skeleton-dark' : 'skeleton'} style={{ height:24, width:80, borderRadius:20 }} />
+        </div>
+        <div className={dark ? 'skeleton-dark' : 'skeleton'} style={{ height:18, width:200, borderRadius:6 }} />
+      </div>
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:20 }}>
+        {[0,1].map(i => (
+          <div key={i} style={{ borderRadius:20, padding:'22px 24px', background:T.cardBg, border:`1px solid ${T.cardBorder}`, boxShadow:T.cardShadow }}>
+            <div className={dark ? 'skeleton-dark' : 'skeleton'} style={{ height:14, width:100, borderRadius:6, marginBottom:16 }} />
+            {[0,1,2,3].map(j => (
+              <div key={j} className={dark ? 'skeleton-dark' : 'skeleton'} style={{ height:13, width:`${85-j*8}%`, borderRadius:6, marginBottom:10 }} />
+            ))}
+          </div>
+        ))}
+      </div>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:16 }}>
+        {[0,1,2,3,4,5].map(i => (
+          <div key={i} style={{ borderRadius:16, padding:'18px 20px', background:T.cardBg, border:`1px solid ${T.cardBorder}`, boxShadow:T.cardShadow }}>
+            <div className={dark ? 'skeleton-dark' : 'skeleton'} style={{ height:12, width:80, borderRadius:6, marginBottom:10 }} />
+            <div className={dark ? 'skeleton-dark' : 'skeleton'} style={{ height:13, width:'90%', borderRadius:6 }} />
+          </div>
+        ))}
+      </div>
+      <div style={{ textAlign:'center', padding:'8px 0' }}>
+        <p style={{ ...mono, fontSize:11, color:T.t3, margin:0, letterSpacing:1 }}>
+          ⏳ IRIS is generating your policy summary… this takes ~30–40s
+        </p>
+      </div>
+    </div>
+  );
+
+  // ── Analysis renderer ─────────────────────────────────────────────────────
   const renderAnalysis = (a) => (
     <div className="fade-in" style={{ display:'flex', flexDirection:'column', gap:20 }}>
       <div style={{ borderRadius:20, padding:'26px 30px', background:T.cardBg, border:`1px solid ${T.cardBorder}`, boxShadow:T.cardShadow }}>
@@ -368,10 +539,10 @@ export default function Dboard({ file, isDark: _initDark, userName = 'My Account
             <p style={{ ...mono, fontSize:10, fontWeight:600, letterSpacing:1.2, textTransform:'uppercase', color:T.t3, margin:0 }}>Exclusions</p>
           </div>
           <ul style={{ margin:0, padding:0, listStyle:'none', display:'flex', flexDirection:'column', gap:10 }}>
-            {a.exclusions.map((ex,i) => (
+            {a.exclusions.map((excl,i) => (
               <li key={i} style={{ display:'flex', alignItems:'flex-start', gap:10 }}>
                 <span style={{ width:6, height:6, borderRadius:'50%', flexShrink:0, marginTop:6, background:T.redClr, boxShadow:`0 0 6px ${T.redClr}55` }} />
-                <span style={{ ...f, fontSize:13, color:T.t2, lineHeight:1.5 }}>{ex}</span>
+                <span style={{ ...f, fontSize:13, color:T.t2, lineHeight:1.5 }}>{excl}</span>
               </li>
             ))}
           </ul>
@@ -404,6 +575,7 @@ export default function Dboard({ file, isDark: _initDark, userName = 'My Account
     </div>
   );
 
+  // ── History renderer ──────────────────────────────────────────────────────
   const renderHistory = () => (
     <div className="fade-in" style={{ display:'flex', flexDirection:'column', gap:12 }}>
       {history.length === 0 && <div style={{ textAlign:'center', padding:'60px 0', color:T.t3, ...f }}>No documents analyzed yet.</div>}
@@ -424,7 +596,6 @@ export default function Dboard({ file, isDark: _initDark, userName = 'My Account
           </div>
           <div style={{ display:'flex', gap:8 }}>
             {item.summaryPending ? (
-              // Backend hasn't generated the summary yet
               <span style={{ display:'flex', alignItems:'center', gap:6, padding:'7px 14px', borderRadius:10, border:`1px solid ${T.amberBrd}`, background:T.amberBg, color:T.amberClr, ...f, fontSize:12, fontWeight:500 }}>
                 <Loader2 size={13} className="iris-spinner" /> Processing…
               </span>
@@ -458,6 +629,16 @@ export default function Dboard({ file, isDark: _initDark, userName = 'My Account
   return (
     <div style={{ display:'flex', height:'100vh', overflow:'hidden', background:T.pageBg, color:T.t1, ...f, transition:'background .4s, color .4s' }}>
 
+      {/* ONE shared hidden file input — zone + header button both call openFilePicker() */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".pdf,.doc,.docx"
+        style={{ display:'none' }}
+        onChange={handleFileInputChange}
+      />
+
+      {/* ── SIDEBAR ── */}
       <aside style={{ flexShrink:0, display:'flex', flexDirection:'column', width: sidebarOpen ? 240 : 66, background:T.sidebarBg, borderRight:`1px solid ${T.headerBorder}`, transition:'width .3s cubic-bezier(0.16,1,0.3,1)', overflow:'hidden' }}>
         <div style={{ display:'flex', alignItems:'center', gap:12, padding:'20px 16px', borderBottom:`1px solid ${T.headerBorder}`, justifyContent: sidebarOpen ? 'flex-start' : 'center' }}>
           {sidebarOpen && (
@@ -482,7 +663,7 @@ export default function Dboard({ file, isDark: _initDark, userName = 'My Account
 
         <nav style={{ flex:1, overflowY:'auto', overflowX:'hidden', padding:'12px 8px', display:'flex', flexDirection:'column', gap:4 }}>
           <NavBtn id="home"    icon={Home}  label="Dashboard" />
-          <NavBtn id="history" icon={Clock} label="History"   />
+          <NavBtn id="history" icon={Clock} label="History" />
           {sidebarOpen && activeTab === 'history' && (
             <div style={{ marginTop:8, display:'flex', flexDirection:'column', gap:2 }}>
               {history.map(item => (
@@ -514,6 +695,7 @@ export default function Dboard({ file, isDark: _initDark, userName = 'My Account
         </div>
       </aside>
 
+      {/* ── MAIN AREA ── */}
       <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden' }}>
         <header style={{ flexShrink:0, display:'flex', alignItems:'center', gap:16, padding:'16px 28px', background:T.headerBg, borderBottom:`1px solid ${T.headerBorder}`, transition:'background .4s, border-color .4s' }}>
           <div style={{ flex:1 }}>
@@ -522,13 +704,17 @@ export default function Dboard({ file, isDark: _initDark, userName = 'My Account
             </h1>
             <p style={{ ...mono, fontSize:11, color:T.t3, margin:'3px 0 0 0' }}>
               {activeTab === 'home'
-                ? activeAnalysis ? `Viewing: ${activeAnalysis.policy_name}` : 'Upload a policy document to begin'
+                ? summaryLoading ? 'Generating summary with IRIS…'
+                  : activeAnalysis ? `Viewing: ${activeAnalysis.policy_name}`
+                  : 'Upload a policy document to begin'
                 : `${history.length} document${history.length !== 1 ? 's' : ''} analyzed`}
             </p>
           </div>
-          <button onClick={() => setShowUploadModal(true)}
-            style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 20px', borderRadius:12, cursor:'pointer', border:'none', background:T.accGrad, color: dark ? '#0c0908' : '#ffffff', ...syne, fontSize:13, fontWeight:600, boxShadow:T.msgUserShadow, transition:'all .2s' }}
-            onMouseEnter={e => e.currentTarget.style.transform='scale(1.03)'}
+          <button
+            onClick={openFilePicker}
+            disabled={uploading || summaryLoading}
+            style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 20px', borderRadius:12, cursor: uploading || summaryLoading ? 'not-allowed' : 'pointer', background: uploading || summaryLoading ? T.sendDisabled : T.accGrad, border:'none', color: dark ? '#0c0908' : '#ffffff', ...syne, fontSize:13, fontWeight:600, boxShadow: uploading || summaryLoading ? 'none' : T.msgUserShadow, transition:'all .2s', opacity: uploading || summaryLoading ? 0.5 : 1 }}
+            onMouseEnter={e => { if (!uploading && !summaryLoading) e.currentTarget.style.transform='scale(1.03)'; }}
             onMouseLeave={e => e.currentTarget.style.transform='none'}
           >
             <FilePlus size={15} /> Upload Policy
@@ -537,25 +723,19 @@ export default function Dboard({ file, isDark: _initDark, userName = 'My Account
 
         <div className="cb-scrollbar" style={{ flex:1, overflowY:'auto', padding:28, display:'flex', flexDirection:'column', gap:24, background:T.pageBg, transition:'background .4s' }}>
 
-          {!activeAnalysis && (
-            <UploadZone T={T} dark={dark} isDragging={isDragging}
-              onDragOver={handleDragOver} onDragLeave={handleDragLeave}
-              onDrop={handleDrop} onClick={handleZoneClick} onChoose={handleZoneClick}
+          {!activeAnalysis && !summaryLoading && (
+            <UploadZone
+              T={T} dark={dark}
+              isDragging={isDragging} uploading={uploading} uploadPct={uploadPct}
+              onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}
+              onZoneClick={openFilePicker} onChoose={openFilePicker}
             />
           )}
 
           {activeTab === 'home' && (
-            activeAnalysis ? renderAnalysis(activeAnalysis)
-            : loadingPolicyId ? (
-              // Fetching summary — show spinner instead of empty state
-              <div className="fade-in" style={{ borderRadius:24, padding:'72px 24px', textAlign:'center', background:T.cardBg, border:`1px solid ${T.cardBorder}`, boxShadow:T.cardShadow, display:'flex', flexDirection:'column', alignItems:'center', gap:20 }}>
-                <Loader2 size={48} className="iris-spinner" style={{ color:T.acc }} />
-                <div>
-                  <h2 style={{ ...bbs, fontSize:36, letterSpacing:2, color:T.t1, margin:'0 0 8px 0', lineHeight:1 }}>LOADING ANALYSIS</h2>
-                  <p style={{ ...f, fontSize:14, color:T.t3, margin:0 }}>Fetching policy summary from server…</p>
-                </div>
-              </div>
-            ) : (
+            summaryLoading ? <SummarySkeleton />
+            : activeAnalysis ? renderAnalysis(activeAnalysis)
+            : (
               <div className="fade-in" style={{ borderRadius:24, padding:'72px 24px', textAlign:'center', background:T.cardBg, border:`1px solid ${T.cardBorder}`, boxShadow:T.cardShadow, display:'flex', flexDirection:'column', alignItems:'center', gap:20 }}>
                 <div style={{ width:80, height:80, borderRadius:24, display:'flex', alignItems:'center', justifyContent:'center', background:T.accGrad, boxShadow:`0 0 40px ${dark ? 'rgba(34,211,238,.2)' : 'rgba(13,148,136,.2)'}` }}>
                   <Aperture size={38} color={dark ? '#0c0908' : '#ffffff'} />
@@ -579,6 +759,7 @@ export default function Dboard({ file, isDark: _initDark, userName = 'My Account
         </div>
       </div>
 
+      {/* ── CHAT FAB ── */}
       {!chatOpen && (
         <button onClick={() => setChatOpen(true)}
           style={{ position:'fixed', bottom:28, right:28, zIndex:100, width:58, height:58, borderRadius:18, border:'none', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', background:T.accGrad, boxShadow:`${T.msgUserShadow}, 0 0 30px ${dark ? 'rgba(34,211,238,.3)' : 'rgba(13,148,136,.25)'}`, transition:'transform .2s' }}
@@ -589,6 +770,7 @@ export default function Dboard({ file, isDark: _initDark, userName = 'My Account
         </button>
       )}
 
+      {/* ── CHAT PANEL ── */}
       {chatOpen && (
         <div className="fade-in" style={{ position:'fixed', bottom:28, right:28, zIndex:100, width:360, height:500, display:'flex', flexDirection:'column', borderRadius:24, overflow:'hidden', background:T.cardBg, border:`1px solid ${T.cardBorder}`, boxShadow:`${T.cardShadow}, 0 0 40px ${dark ? 'rgba(34,211,238,.15)' : 'rgba(13,148,136,.15)'}` }}>
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'16px 20px', background:T.headerBg, borderBottom:`1px solid ${T.headerBorder}` }}>
@@ -665,17 +847,6 @@ export default function Dboard({ file, isDark: _initDark, userName = 'My Account
             </p>
           </div>
         </div>
-      )}
-
-      {showUploadModal && (
-        <UploadModal
-          initDark={dark}
-          onCancel={() => setShowUploadModal(false)}
-          onUploadComplete={(uploadedFile, policyId) => {
-            processFile(uploadedFile, policyId);
-            setShowUploadModal(false);
-          }}
-        />
       )}
 
       <style>{`.cb-scrollbar::-webkit-scrollbar-thumb { background: ${T.scrollThumb}; }`}</style>

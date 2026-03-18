@@ -138,19 +138,18 @@ export default function UploadModal({ onUploadComplete, onCancel }) {
   const [dark,       setDark]       = useState(false);
   const [backendMsg, setBackendMsg] = useState('');
 
-  const fileRef     = useRef(null);
+  const fileRef    = useRef(null);
   const dragCounter = useRef(0);
-  const stageRef    = useRef(-1);
-  const policyIdRef = useRef(null);   // stores policy_id returned by backend upload
+  const stageRef   = useRef(-1);
 
-  // Guard — prevents onUploadComplete firing more than once per upload
+  // ── FIX 1: guard — prevents onUploadComplete firing more than once ──
   const completedRef = useRef(false);
 
-  // Stable ref to the latest onUploadComplete prop.
-  // Keeping this OUT of effect dependency arrays stops the triple-upload:
-  // App.jsx re-creates the callback on every render, so putting
-  // onUploadComplete in deps would re-fire the effect while pct===100
-  // and status==='uploading' is still true.
+  // ── FIX 2: stable ref to the latest onUploadComplete prop.
+  //    Keeping this OUT of effect dependency arrays is what stops the
+  //    triple-upload: App.jsx re-creates handleUploadComplete on every
+  //    render, so putting onUploadComplete in deps re-fires the effect
+  //    while pct===100 and status==='uploading' is still true. ──
   const onCompleteRef = useRef(onUploadComplete);
   useEffect(() => { onCompleteRef.current = onUploadComplete; }, [onUploadComplete]);
 
@@ -166,36 +165,42 @@ export default function UploadModal({ onUploadComplete, onCancel }) {
     return () => { link.remove(); style.remove(); };
   }, []);
 
-  // ── Real upload + backend poll ─────────────────────────────────────────────
-  // Only runs when status flips to 'uploading'. The file is captured via
-  // closure — intentionally NOT in the dependency array to avoid re-triggering
-  // on file object identity changes.
+  // ── Upload + poll effect — only runs when status flips to 'uploading' ──
   useEffect(() => {
     if (status !== 'uploading') return;
 
-    completedRef.current = false;   // fresh guard for this upload
+    // Reset the guard so a fresh upload can complete
+    completedRef.current = false;
     setPct(5); setStage(0); stageRef.current = 0;
 
     let pollId;
 
     const startUpload = async () => {
       try {
+        // POST the file to the backend
         const fd = new FormData();
         fd.append('file', file);
-        const data = await fetchApi('/ingest/upload', { method:'POST', body:fd });
-        const pid  = data.policy_id;
-        policyIdRef.current = pid;   // make pid available to completion effect
+        const data = await fetchApi('/ingest/upload', {
+          method: 'POST',
+          body: fd,
+        });
+        const pid = data.policy_id;
         setPct(20);
 
-        // Poll /ingest/status/:pid every 2 s until backend says 'ready'
+        // Poll for processing status every 2 s
         pollId = setInterval(async () => {
           try {
             const sData = await fetchApi(`/ingest/status/${pid}`);
+            console.log('[DEBUG] Poll status:', sData);
+
             if (sData.progress !== undefined) setPct(sData.progress);
             if (sData.message)                setBackendMsg(sData.message);
+
+            // When the backend reports 'ready', push pct to 100 and let the
+            // completion effect (below) take over — poll is done here.
             if (sData.status === 'ready') {
               clearInterval(pollId);
-              setPct(100);   // triggers completion effect below
+              setPct(100);
             }
           } catch (e) {
             console.error('[POLL ERROR]', e);
@@ -210,26 +215,26 @@ export default function UploadModal({ onUploadComplete, onCancel }) {
 
     startUpload();
     return () => { if (pollId) clearInterval(pollId); };
-  }, [status]); // ← ONLY 'status' — file accessed via closure
+  }, [status]); // ← ONLY 'status' — file is accessed via closure, not a dep
 
-  // ── Stage advancement + completion detector ────────────────────────────────
-  // onUploadComplete is intentionally absent — we use onCompleteRef instead
-  // so a new prop reference never re-fires this effect.
+  // ── Stage advancement + completion detector ──
+  // onUploadComplete is intentionally absent from the dep array — we use
+  // onCompleteRef instead so a new prop reference never re-fires this effect.
   useEffect(() => {
     if (pct >= 25 && stageRef.current < 1) { stageRef.current = 1; setStage(1); }
     if (pct >= 55 && stageRef.current < 2) { stageRef.current = 2; setStage(2); }
     if (pct >= 80 && stageRef.current < 3) { stageRef.current = 3; setStage(3); }
 
     if (pct >= 100 && status === 'uploading') {
-      if (completedRef.current) return;   // skip if already fired
+      if (completedRef.current) return;   // ← FIX 3: skip if already fired
       completedRef.current = true;
       const t1 = setTimeout(() => {
         setStatus('done');
-        setTimeout(() => onCompleteRef.current(file, policyIdRef.current), 800);
+        setTimeout(() => onCompleteRef.current(file), 800);
       }, 250);
       return () => clearTimeout(t1);
     }
-  }, [pct, status, file]); // ← onUploadComplete intentionally excluded
+  }, [pct, status, file]); // ← onUploadComplete removed from deps
 
   const validateAndPick = useCallback((f) => {
     setError('');
@@ -257,16 +262,16 @@ export default function UploadModal({ onUploadComplete, onCancel }) {
   const handleDrop = (e) => {
     e.preventDefault(); e.stopPropagation();
     setDrag(false); dragCounter.current = 0;
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0)
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       validateAndPick(e.dataTransfer.files[0]);
+    }
   };
 
-  // reset clears the guard so a re-upload works
+  // ── FIX 4: reset clears the guard so a re-upload works ──
   const reset = () => {
     setFile(null); setStatus('idle'); setPct(0);
     setStage(-1); setError(''); setBackendMsg('');
     completedRef.current = false;
-    policyIdRef.current   = null;
   };
 
   const uploading = status === 'uploading';
@@ -288,13 +293,14 @@ export default function UploadModal({ onUploadComplete, onCancel }) {
 
   return (
     <div style={f}>
+      {/* ══ FULL-SCREEN OVERLAY ══════════════════════════════ */}
       <div style={{
         position:'fixed', inset:0, zIndex:50,
         display:'flex', alignItems:'center', justifyContent:'center',
         overflow:'hidden', background:T.pageBg, transition:'background .5s ease',
       }}>
 
-        {/* ── DARK BACKGROUND ── */}
+        {/* DARK BG */}
         {dark && (
           <div style={{ position:'absolute', inset:0, pointerEvents:'none' }}>
             <svg style={{ position:'absolute', inset:0, width:'100%', height:'100%' }}>
@@ -303,12 +309,25 @@ export default function UploadModal({ onUploadComplete, onCancel }) {
                   style={{ animation:`um-twinkle ${s.dur}s ease-in-out infinite`, animationDelay:`${s.delay}s`, opacity:.12 }}/>
               ))}
             </svg>
-            <div style={{ position:'absolute', width:700, height:700, borderRadius:'50%', top:'30%', left:'50%', transform:'translate(-50%,-50%)', filter:'blur(80px)', background:'radial-gradient(circle,rgba(34,211,238,.1) 0%,transparent 65%)', animation:'um-pulse 6s ease-in-out infinite' }}/>
-            <div style={{ position:'absolute', width:500, height:500, borderRadius:'50%', top:'-15%', left:'-10%', filter:'blur(90px)', background:'radial-gradient(circle,rgba(14,116,144,.12) 0%,transparent 65%)', animation:'um-pulse 8s ease-in-out infinite', animationDelay:'.8s' }}/>
-            <div style={{ position:'absolute', width:420, height:420, borderRadius:'50%', bottom:'-12%', right:'-8%', filter:'blur(80px)', background:'radial-gradient(circle,rgba(34,211,238,.07) 0%,transparent 65%)', animation:'um-pulse 7s ease-in-out infinite', animationDelay:'2s' }}/>
+            <div style={{ position:'absolute', width:700, height:700, borderRadius:'50%',
+              top:'30%', left:'50%', transform:'translate(-50%,-50%)', filter:'blur(80px)',
+              background:'radial-gradient(circle,rgba(34,211,238,.1) 0%,transparent 65%)',
+              animation:'um-pulse 6s ease-in-out infinite' }}/>
+            <div style={{ position:'absolute', width:500, height:500, borderRadius:'50%',
+              top:'-15%', left:'-10%', filter:'blur(90px)',
+              background:'radial-gradient(circle,rgba(14,116,144,.12) 0%,transparent 65%)',
+              animation:'um-pulse 8s ease-in-out infinite', animationDelay:'.8s' }}/>
+            <div style={{ position:'absolute', width:420, height:420, borderRadius:'50%',
+              bottom:'-12%', right:'-8%', filter:'blur(80px)',
+              background:'radial-gradient(circle,rgba(34,211,238,.07) 0%,transparent 65%)',
+              animation:'um-pulse 7s ease-in-out infinite', animationDelay:'2s' }}/>
             <div style={{ position:'absolute', top:'50%', left:'50%', width:0, height:0 }}>
-              <div style={{ position:'absolute', width:5, height:5, borderRadius:'50%', background:'#22d3ee', boxShadow:'0 0 8px #22d3ee', marginLeft:-2.5, marginTop:-2.5, animation:'um-orbit 14s linear infinite', opacity:.6 }}/>
-              <div style={{ position:'absolute', width:3, height:3, borderRadius:'50%', background:'#a5f3fc', boxShadow:'0 0 5px #a5f3fc', marginLeft:-1.5, marginTop:-1.5, animation:'um-orbit2 20s linear infinite', opacity:.4 }}/>
+              <div style={{ position:'absolute', width:5, height:5, borderRadius:'50%',
+                background:'#22d3ee', boxShadow:'0 0 8px #22d3ee', marginLeft:-2.5, marginTop:-2.5,
+                animation:'um-orbit 14s linear infinite', opacity:.6 }}/>
+              <div style={{ position:'absolute', width:3, height:3, borderRadius:'50%',
+                background:'#a5f3fc', boxShadow:'0 0 5px #a5f3fc', marginLeft:-1.5, marginTop:-1.5,
+                animation:'um-orbit2 20s linear infinite', opacity:.4 }}/>
             </div>
             <svg style={{ position:'absolute', inset:0, width:'100%', height:'100%', opacity:.03 }}>
               <defs><pattern id="cg" x="0" y="0" width="56" height="56" patternUnits="userSpaceOnUse">
@@ -319,23 +338,32 @@ export default function UploadModal({ onUploadComplete, onCancel }) {
           </div>
         )}
 
-        {/* ── LIGHT BACKGROUND ── */}
+        {/* LIGHT BG */}
         {!dark && (
           <div style={{ position:'absolute', inset:0, pointerEvents:'none', overflow:'hidden' }}>
-            <svg style={{ position:'absolute', top:'-5%', right:'-8%', width:380, height:380, animation:'um-sway 8s ease-in-out infinite', opacity:.1 }}>
+            <svg style={{ position:'absolute', top:'-5%', right:'-8%', width:380, height:380,
+              animation:'um-sway 8s ease-in-out infinite', opacity:.1 }}>
               <ellipse cx="190" cy="190" rx="160" ry="72" fill="#14b8a6" transform="rotate(-28 190 190)"/>
               <ellipse cx="190" cy="190" rx="140" ry="56" fill="#0d9488" transform="rotate(14 190 190)"/>
               <ellipse cx="190" cy="190" rx="90"  ry="32" fill="#5eead4" transform="rotate(-5 190 190)"/>
             </svg>
-            <svg style={{ position:'absolute', bottom:'-8%', left:'-5%', width:320, height:320, animation:'um-sway 10s ease-in-out infinite', animationDelay:'1.5s', opacity:.08 }}>
+            <svg style={{ position:'absolute', bottom:'-8%', left:'-5%', width:320, height:320,
+              animation:'um-sway 10s ease-in-out infinite', animationDelay:'1.5s', opacity:.08 }}>
               <ellipse cx="160" cy="160" rx="130" ry="60" fill="#0d9488" transform="rotate(22 160 160)"/>
               <ellipse cx="160" cy="160" rx="80"  ry="35" fill="#14b8a6" transform="rotate(-10 160 160)"/>
             </svg>
-            <svg style={{ position:'absolute', top:'30%', left:'-3%', width:200, height:200, animation:'um-sway 12s ease-in-out infinite', animationDelay:'3s', opacity:.06 }}>
+            <svg style={{ position:'absolute', top:'30%', left:'-3%', width:200, height:200,
+              animation:'um-sway 12s ease-in-out infinite', animationDelay:'3s', opacity:.06 }}>
               <ellipse cx="100" cy="100" rx="80" ry="38" fill="#14b8a6" transform="rotate(35 100 100)"/>
             </svg>
-            <div style={{ position:'absolute', width:600, height:600, borderRadius:'50%', top:'-20%', left:'-10%', filter:'blur(80px)', background:'radial-gradient(circle,rgba(94,234,212,.3) 0%,transparent 65%)', animation:'um-pulse 7s ease-in-out infinite' }}/>
-            <div style={{ position:'absolute', width:500, height:500, borderRadius:'50%', bottom:'-18%', right:'-8%', filter:'blur(80px)', background:'radial-gradient(circle,rgba(20,184,166,.25) 0%,transparent 65%)', animation:'um-pulse 9s ease-in-out infinite', animationDelay:'1.2s' }}/>
+            <div style={{ position:'absolute', width:600, height:600, borderRadius:'50%',
+              top:'-20%', left:'-10%', filter:'blur(80px)',
+              background:'radial-gradient(circle,rgba(94,234,212,.3) 0%,transparent 65%)',
+              animation:'um-pulse 7s ease-in-out infinite' }}/>
+            <div style={{ position:'absolute', width:500, height:500, borderRadius:'50%',
+              bottom:'-18%', right:'-8%', filter:'blur(80px)',
+              background:'radial-gradient(circle,rgba(20,184,166,.25) 0%,transparent 65%)',
+              animation:'um-pulse 9s ease-in-out infinite', animationDelay:'1.2s' }}/>
             <svg style={{ position:'absolute', inset:0, width:'100%', height:'100%', opacity:.05 }}>
               <defs><pattern id="gg" x="0" y="0" width="22" height="22" patternUnits="userSpaceOnUse">
                 <circle cx="1" cy="1" r="1" fill="#0d9488"/>
@@ -345,7 +373,7 @@ export default function UploadModal({ onUploadComplete, onCancel }) {
           </div>
         )}
 
-        {/* ── CARD ── */}
+        {/* ══ CARD ═══════════════════════════════════════════ */}
         <div className="um-card" style={{
           position:'relative', zIndex:10, display:'flex', overflow:'hidden',
           width:'min(880px, calc(100vw - 20px))', maxHeight:'calc(100vh - 40px)', borderRadius:26,
@@ -354,7 +382,12 @@ export default function UploadModal({ onUploadComplete, onCancel }) {
         }}>
 
           {/* LEFT PANEL */}
-          <div style={{ width:272, flexShrink:0, display:'flex', flexDirection:'column', justifyContent:'space-between', padding:32, position:'relative', overflow:'hidden', background:T.leftPanelBg, borderRight:`1px solid ${T.leftBorder}`, transition:'background .4s, border-color .4s' }}>
+          <div style={{
+            width:272, flexShrink:0, display:'flex', flexDirection:'column', justifyContent:'space-between',
+            padding:32, position:'relative', overflow:'hidden',
+            background:T.leftPanelBg, borderRight:`1px solid ${T.leftBorder}`,
+            transition:'background .4s, border-color .4s',
+          }}>
             <svg style={{ position:'absolute', inset:0, width:'100%', height:'100%', pointerEvents:'none', opacity:.06 }}>
               <defs><pattern id="lp" x="0" y="0" width="20" height="20" patternUnits="userSpaceOnUse">
                 <circle cx="1" cy="1" r=".8" fill={T.acc}/>
@@ -364,10 +397,14 @@ export default function UploadModal({ onUploadComplete, onCancel }) {
 
             <div style={{ position:'relative', zIndex:1 }}>
               <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:36 }}>
-                <div style={{ width:36, height:36, borderRadius:10, background:T.brandGrad, display:'flex', alignItems:'center', justifyContent:'center', boxShadow:`0 4px 14px ${T.acc}44` }}>
+                <div style={{ width:36, height:36, borderRadius:10, background:T.brandGrad,
+                  display:'flex', alignItems:'center', justifyContent:'center',
+                  boxShadow:`0 4px 14px ${T.acc}44` }}>
                   <Cpu size={16} color="#fff"/>
                 </div>
-                <span style={{ ...syne, fontWeight:700, fontSize:19, letterSpacing:.5, color:T.t1 }}>PolicyLens</span>
+                <span style={{ ...syne, fontWeight:700, fontSize:19, letterSpacing:.5, color:T.t1 }}>
+                  PolicyLens
+                </span>
               </div>
 
               {[
@@ -377,7 +414,9 @@ export default function UploadModal({ onUploadComplete, onCancel }) {
                 { icon: Eye,         label:'Risk score in seconds'},
               ].map(({ icon: Icon, label }) => (
                 <div key={label} style={{ display:'flex', alignItems:'center', gap:12, marginBottom:18 }}>
-                  <div style={{ width:30, height:30, borderRadius:8, flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center', background:T.iconBg, border:`1px solid ${T.iconBorder}`, transition:'background .4s' }}>
+                  <div style={{ width:30, height:30, borderRadius:8, flexShrink:0,
+                    display:'flex', alignItems:'center', justifyContent:'center',
+                    background:T.iconBg, border:`1px solid ${T.iconBorder}`, transition:'background .4s' }}>
                     <Icon size={13} style={{ color:T.iconColor }}/>
                   </div>
                   <span style={{ ...f, fontSize:12, color:T.t2 }}>{label}</span>
@@ -389,7 +428,12 @@ export default function UploadModal({ onUploadComplete, onCancel }) {
               <p style={{ ...mono, fontSize:9, letterSpacing:3, color:T.t3, marginBottom:10 }}>DOC SIGNATURE</p>
               <div style={{ display:'flex', alignItems:'flex-end', gap:2, height:56 }}>
                 {BARS.map((h, i) => (
-                  <div key={i} style={{ width:3, borderRadius:2, height:`${hasFile ? h : 5}px`, background: hasFile ? T.waveGrad : T.waveInactive, transition:`height ${0.28 + i * 0.008}s cubic-bezier(.16,1,.3,1)` }}/>
+                  <div key={i} style={{
+                    width:3, borderRadius:2,
+                    height:`${hasFile ? h : 5}px`,
+                    background: hasFile ? T.waveGrad : T.waveInactive,
+                    transition:`height ${0.28 + i * 0.008}s cubic-bezier(.16,1,.3,1)`,
+                  }}/>
                 ))}
               </div>
               {hasFile && (
@@ -408,24 +452,28 @@ export default function UploadModal({ onUploadComplete, onCancel }) {
             <div style={{ padding:'28px 32px 20px', display:'flex', justifyContent:'space-between', alignItems:'flex-start', borderBottom:`1px solid ${T.headerBorder}`, transition:'border-color .4s' }}>
               <div>
                 <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:12 }}>
-                  <span style={{ ...syne, fontWeight:700, fontSize:10, letterSpacing:'1px', textTransform:'uppercase', padding:'4px 12px', borderRadius:99, background:T.pillBg, border:`1px solid ${T.pillBorder}`, color:T.pillText, transition:'all .4s' }}>PolicyLens AI</span>
-                  <span style={{ ...mono, fontSize:10, letterSpacing:'1px', padding:'4px 10px', borderRadius:99, background:T.pdfBg, border:`1px solid ${T.pdfBorder}`, color:T.pdfText, transition:'all .4s' }}>.PDF</span>
+                  <span style={{ ...syne, fontWeight:700, fontSize:10, letterSpacing:'1px', textTransform:'uppercase', padding:'4px 12px', borderRadius:99, background:T.pillBg, border:`1px solid ${T.pillBorder}`, color:T.pillText, transition:'all .4s' }}>
+                    PolicyLens AI
+                  </span>
+                  <span style={{ ...mono, fontSize:10, letterSpacing:'1px', padding:'4px 10px', borderRadius:99, background:T.pdfBg, border:`1px solid ${T.pdfBorder}`, color:T.pdfText, transition:'all .4s' }}>
+                    .PDF
+                  </span>
                 </div>
-                <h2 style={{ ...bebas, fontSize:44, letterSpacing:2, color:T.t1, lineHeight:1, margin:0, transition:'color .4s' }}>Upload Document</h2>
+                <h2 style={{ ...bebas, fontSize:44, letterSpacing:2, color:T.t1, lineHeight:1, margin:0, transition:'color .4s' }}>
+                  Upload Document
+                </h2>
                 <p style={{ ...f, marginTop:8, fontSize:14, color:T.t2, transition:'color .4s' }}>
                   Drop a contract or policy — AI extracts every clause in seconds.
                 </p>
               </div>
 
               <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                <button onClick={() => setDark(v => !v)}
-                  style={{ width:36, height:36, borderRadius:10, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', background:T.toggleBg, border:`1px solid ${T.toggleBorder}`, transition:'all .2s' }}
+                <button onClick={() => setDark(v => !v)} style={{ width:36, height:36, borderRadius:10, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', background:T.toggleBg, border:`1px solid ${T.toggleBorder}`, transition:'all .2s' }}
                   onMouseEnter={e => e.currentTarget.style.transform='rotate(14deg) scale(1.1)'}
                   onMouseLeave={e => e.currentTarget.style.transform='none'}>
                   {dark ? <Sun size={14} style={{ color:'#22d3ee' }}/> : <Moon size={14} style={{ color:T.acc }}/>}
                 </button>
-                <button onClick={onCancel}
-                  style={{ width:36, height:36, borderRadius:10, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', background:T.clearBg, border:`1px solid ${T.clearBorder}`, color:T.t2, transition:'all .15s' }}
+                <button onClick={onCancel} style={{ width:36, height:36, borderRadius:10, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', background:T.clearBg, border:`1px solid ${T.clearBorder}`, color:T.t2, transition:'all .15s' }}
                   onMouseEnter={e => { e.currentTarget.style.background='rgba(239,68,68,.12)'; e.currentTarget.style.borderColor='rgba(239,68,68,.4)'; e.currentTarget.style.color='#f87171'; }}
                   onMouseLeave={e => { e.currentTarget.style.background=T.clearBg; e.currentTarget.style.borderColor=T.clearBorder; e.currentTarget.style.color=T.t2; }}>
                   <X size={15}/>
@@ -449,7 +497,7 @@ export default function UploadModal({ onUploadComplete, onCancel }) {
                   border: drag
                     ? `2px solid ${T.dropZoneDragBorder}`
                     : error ? `2px solid ${T.errorText}`
-                    : file  ? `1px solid ${T.dropZoneBorder}`
+                    : file ? `1px solid ${T.dropZoneBorder}`
                     : `2px dashed ${T.t4}`,
                 }}
               >
@@ -468,10 +516,16 @@ export default function UploadModal({ onUploadComplete, onCancel }) {
                   <div className="um-scan" style={{ position:'absolute', left:0, right:0, height:2, zIndex:20, pointerEvents:'none', background:T.scanBeam, boxShadow:T.scanGlow }}/>
                 )}
 
-                {/* Empty / error state */}
+                {/* empty / error */}
                 {!file && (
                   <div className={error ? 'um-shake' : 'um-float'} style={{ position:'absolute', inset:0, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:14, zIndex:10, pointerEvents:'none' }}>
-                    <div style={{ width:56, height:56, borderRadius:18, display:'flex', alignItems:'center', justifyContent:'center', background: error ? 'rgba(239,68,68,.1)' : drag ? T.brandGrad : T.iconBg, border: drag ? 'none' : `1px solid ${error ? 'transparent' : T.iconBorder}`, transform: drag ? 'scale(1.12)' : 'scale(1)', boxShadow: drag ? `0 0 28px ${T.acc}55` : 'none', transition:'all .3s' }}>
+                    <div style={{
+                      width:56, height:56, borderRadius:18, display:'flex', alignItems:'center', justifyContent:'center',
+                      background: error ? 'rgba(239,68,68,.1)' : drag ? T.brandGrad : T.iconBg,
+                      border: drag ? 'none' : `1px solid ${error ? 'transparent' : T.iconBorder}`,
+                      transform: drag ? 'scale(1.12)' : 'scale(1)',
+                      boxShadow: drag ? `0 0 28px ${T.acc}55` : 'none', transition:'all .3s',
+                    }}>
                       {error
                         ? <AlertTriangle size={26} style={{ color:T.errorText }}/>
                         : <UploadCloud   size={26} style={{ color: drag ? '#fff' : T.acc }}/>
@@ -490,14 +544,16 @@ export default function UploadModal({ onUploadComplete, onCancel }) {
                     {!error && (
                       <div style={{ display:'flex', gap:6 }}>
                         {['PDF/A','Scanned','Multi-page','Encrypted'].map(tag => (
-                          <span key={tag} style={{ ...mono, fontSize:10, padding:'3px 10px', borderRadius:99, background:T.chipBg, border:`1px solid ${T.chipBorder}`, color:T.t2, transition:'all .4s' }}>{tag}</span>
+                          <span key={tag} style={{ ...mono, fontSize:10, padding:'3px 10px', borderRadius:99, background:T.chipBg, border:`1px solid ${T.chipBorder}`, color:T.t2, transition:'all .4s' }}>
+                            {tag}
+                          </span>
                         ))}
                       </div>
                     )}
                   </div>
                 )}
 
-                {/* File loaded state */}
+                {/* file loaded */}
                 {file && (
                   <div style={{ position:'absolute', inset:0, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:16, zIndex:10, padding:'0 32px' }}>
                     <div style={{ display:'flex', alignItems:'center', gap:14, width:'100%', maxWidth:440 }}>
@@ -505,12 +561,15 @@ export default function UploadModal({ onUploadComplete, onCancel }) {
                         {done ? <CheckCircle2 size={20} style={{ color:T.doneText }}/> : <FileText size={20} style={{ color:'#f87171' }}/>}
                       </div>
                       <div style={{ flex:1, overflow:'hidden' }}>
-                        <p style={{ ...syne, fontSize:14, fontWeight:600, color:T.fileText, margin:0, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{file.name}</p>
-                        <p style={{ ...mono, fontSize:11, color:T.fileSub, marginTop:3 }}>{(file.size/1048576).toFixed(2)} MB · PDF</p>
+                        <p style={{ ...syne, fontSize:14, fontWeight:600, color:T.fileText, margin:0, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+                          {file.name}
+                        </p>
+                        <p style={{ ...mono, fontSize:11, color:T.fileSub, marginTop:3 }}>
+                          {(file.size/1048576).toFixed(2)} MB · PDF
+                        </p>
                       </div>
                       {status === 'idle' && (
-                        <button onClick={e => { e.stopPropagation(); reset(); }}
-                          style={{ width:28, height:28, borderRadius:8, flexShrink:0, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', background:T.clearBg, border:`1px solid ${T.clearBorder}`, color:T.t2, transition:'all .15s' }}
+                        <button onClick={e => { e.stopPropagation(); reset(); }} style={{ width:28, height:28, borderRadius:8, flexShrink:0, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', background:T.clearBg, border:`1px solid ${T.clearBorder}`, color:T.t2, transition:'all .15s' }}
                           onMouseEnter={e => { e.currentTarget.style.background='rgba(239,68,68,.1)'; e.currentTarget.style.color='#f87171'; }}
                           onMouseLeave={e => { e.currentTarget.style.background=T.clearBg; e.currentTarget.style.color=T.t2; }}>
                           <X size={12}/>
@@ -525,7 +584,9 @@ export default function UploadModal({ onUploadComplete, onCancel }) {
                             <Loader size={12} className="um-spin" style={{ color:T.acc }}/>
                             {getProgressText()}
                           </span>
-                          <span style={{ ...mono, fontSize:11, color:T.acc }}>{Math.min(100, Math.round(pct))}%</span>
+                          <span style={{ ...mono, fontSize:11, color:T.acc }}>
+                            {Math.min(100, Math.round(pct))}%
+                          </span>
                         </div>
                         <div style={{ position:'relative', height:4, borderRadius:99, background:T.progressBg, overflow:'hidden' }}>
                           <div className="um-shim" style={{ position:'absolute', left:0, top:0, height:'100%', borderRadius:99, background:T.progressFill, width:`${pct}%`, transition:'width .08s linear' }}/>
