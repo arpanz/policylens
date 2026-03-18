@@ -4,7 +4,7 @@ import {
   Upload, Clock, X, FileText, AlertTriangle, CheckCircle2,
   Shield, DollarSign, Calendar, Info, Trash2, Eye, FilePlus,
   Home, Aperture, Sun, Moon, Menu, BadgeCheck, Banknote, LogOut,
-  RefreshCw, Send, Loader2,
+  RefreshCw, Send, Loader2, MessageSquare,
 } from 'lucide-react';
 import { fetchApi, streamApi } from '../../api';
 
@@ -158,10 +158,11 @@ export default function Dboard({ file, isDark: _initDark, userName = 'My Account
   const [uploading,       setUploading]      = useState(false);
   const [uploadPct,       setUploadPct]      = useState(0);
   const [chatOpen,        setChatOpen]       = useState(false);
+  const [showChatPrompt,  setShowChatPrompt] = useState(false);
   const [chatInput,       setChatInput]      = useState('');
   const [isTyping,        setIsTyping]       = useState(false);
   const [isSigningOut,    setIsSigningOut]   = useState(false);
-  const [chatDimensions,  setChatDimensions] = useState({ w: 360, h: 500 });
+  const [chatDimensions,  setChatDimensions] = useState({ w: 430, h: 620 });
   const [chatMessagesMap, setChatMessagesMap] = useState({
     default: [makeWelcomeMsg(file?.name ?? null)],
   });
@@ -170,6 +171,9 @@ export default function Dboard({ file, isDark: _initDark, userName = 'My Account
   const fileInputRef    = useRef(null);  // ONE shared file input for both zone + header
   const chatEnd         = useRef(null);
   const summaryPollRef  = useRef(null);
+  const chatPromptDelayRef = useRef(null);
+  const chatPromptHideRef  = useRef(null);
+  const promptedPolicyIdsRef = useRef(new Set());
   const isProcessingRef = useRef(false); // guard against duplicate processFile calls
   const hasAutoProcessed = useRef(false);
   const isResizingRef   = useRef(null);
@@ -182,6 +186,8 @@ export default function Dboard({ file, isDark: _initDark, userName = 'My Account
   const syne = { fontFamily:"'Syne', sans-serif" };
   const bbs  = { fontFamily:"'Bebas Neue', cursive" };
   const mono = { fontFamily:"'JetBrains Mono', monospace" };
+  const displayUserName = (typeof userName === 'string' && userName.trim()) ? userName.trim() : 'My Account';
+  const displayUserInitial = displayUserName.charAt(0).toUpperCase();
 
   // Trigger the single shared file input from any button
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -203,8 +209,40 @@ export default function Dboard({ file, isDark: _initDark, userName = 'My Account
 
   // ── Clear summary poll on unmount ─────────────────────────────────────────
   useEffect(() => {
-    return () => { if (summaryPollRef.current) clearInterval(summaryPollRef.current); };
+    return () => {
+      if (summaryPollRef.current) clearInterval(summaryPollRef.current);
+      if (chatPromptDelayRef.current) clearTimeout(chatPromptDelayRef.current);
+      if (chatPromptHideRef.current) clearTimeout(chatPromptHideRef.current);
+    };
   }, []);
+
+  // Show a delayed prompt above the chat button once a policy summary is ready.
+  useEffect(() => {
+    if (summaryLoading || !activeAnalysis) return;
+
+    const policyKey = String(activeAnalysis.policy_id ?? activePolicyId ?? '');
+    if (!policyKey || promptedPolicyIdsRef.current.has(policyKey)) return;
+
+    promptedPolicyIdsRef.current.add(policyKey);
+    setShowChatPrompt(false);
+    if (chatPromptDelayRef.current) clearTimeout(chatPromptDelayRef.current);
+    if (chatPromptHideRef.current) clearTimeout(chatPromptHideRef.current);
+
+    const delayMs = 3000 + Math.floor(Math.random() * 2000);
+    chatPromptDelayRef.current = setTimeout(() => {
+      setShowChatPrompt(true);
+      chatPromptHideRef.current = setTimeout(() => setShowChatPrompt(false), 12000);
+    }, delayMs);
+  }, [summaryLoading, activeAnalysis, activePolicyId]);
+
+  useEffect(() => {
+    if (!chatOpen) return;
+    setShowChatPrompt(false);
+    if (chatPromptHideRef.current) {
+      clearTimeout(chatPromptHideRef.current);
+      chatPromptHideRef.current = null;
+    }
+  }, [chatOpen]);
 
   // ── Auto-scroll chat ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -693,10 +731,10 @@ export default function Dboard({ file, isDark: _initDark, userName = 'My Account
           {sidebarOpen && (
             <>
               <div style={{ width:36, height:36, borderRadius:10, flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center', background:T.accGrad, boxShadow:T.msgUserShadow, color: dark ? '#0c0908' : '#ffffff', ...syne, fontSize:16, fontWeight:700 }}>
-                {userName.charAt(0).toUpperCase()}
+                {displayUserInitial}
               </div>
               <div style={{ minWidth:0, flex:1 }}>
-                <p style={{ ...syne, fontSize:13, fontWeight:700, color:T.t1, margin:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:120, lineHeight:1.3 }}>{userName}</p>
+                <p style={{ ...syne, fontSize:13, fontWeight:700, color:T.t1, margin:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:120, lineHeight:1.3 }}>{displayUserName}</p>
                 <p style={{ ...mono, fontSize:9, color:T.t3, margin:'2px 0 0 0', letterSpacing:1 }}>POLICY INTELLIGENCE</p>
               </div>
             </>
@@ -827,6 +865,98 @@ export default function Dboard({ file, isDark: _initDark, userName = 'My Account
       </div>
 
       {/* ── CHAT FAB ── */}
+      {showChatPrompt && !chatOpen && (
+        <div
+          className="fade-in"
+          style={{
+            position:'fixed',
+            bottom:96,
+            right:28,
+            zIndex:101,
+            width:280,
+            maxWidth:'calc(100vw - 24px)',
+            padding:'10px 12px',
+            borderRadius:14,
+            background:T.cardBg,
+            border:`1px solid ${T.cardBorder}`,
+            boxShadow:T.cardShadow,
+            display:'flex',
+            alignItems:'center',
+            gap:10,
+          }}
+        >
+          <div style={{ width:28, height:28, borderRadius:8, flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center', background:T.accBg, border:`1px solid ${T.cardBorder}` }}>
+            <MessageSquare size={14} style={{ color:T.acc }} />
+          </div>
+
+          <div style={{ minWidth:0, flex:1 }}>
+            <p style={{ ...syne, margin:'0 0 2px 0', fontSize:12, lineHeight:1.3, color:T.t1, fontWeight:700 }}>
+              Summary ready
+            </p>
+            <p style={{ ...f, margin:0, fontSize:11, lineHeight:1.4, color:T.t3 }}>
+              Ask IRIS a quick question.
+            </p>
+          </div>
+
+          <button
+            onClick={() => {
+              setShowChatPrompt(false);
+              setChatOpen(true);
+            }}
+            style={{
+              height:28,
+              padding:'0 10px',
+              borderRadius:8,
+              border:`1px solid ${T.navActiveBrd}`,
+              background:T.navActiveBg,
+              color:T.navActiveClr,
+              cursor:'pointer',
+              ...f,
+              fontSize:11,
+              fontWeight:600,
+              flexShrink:0,
+            }}
+          >
+            Open
+          </button>
+
+          <button
+            onClick={() => setShowChatPrompt(false)}
+            aria-label="Dismiss chat tip"
+            style={{
+              width:22,
+              height:22,
+              borderRadius:7,
+              border:`1px solid ${T.cardBorder}`,
+              background:'transparent',
+              color:T.t3,
+              cursor:'pointer',
+              display:'flex',
+              alignItems:'center',
+              justifyContent:'center',
+              padding:0,
+              flexShrink:0,
+            }}
+          >
+            <X size={11} />
+          </button>
+
+          <div
+            style={{
+              position:'absolute',
+              right:22,
+              bottom:-6,
+              width:12,
+              height:12,
+              background:T.cardBg,
+              borderRight:`1px solid ${T.cardBorder}`,
+              borderBottom:`1px solid ${T.cardBorder}`,
+              transform:'rotate(45deg)',
+            }}
+          />
+        </div>
+      )}
+
       {!chatOpen && (
         <button onClick={() => setChatOpen(true)}
           style={{ position:'fixed', bottom:28, right:28, zIndex:100, width:58, height:58, borderRadius:18, border:'none', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', background:T.accGrad, boxShadow:`${T.msgUserShadow}, 0 0 30px ${dark ? 'rgba(34,211,238,.3)' : 'rgba(13,148,136,.25)'}`, transition:'transform .2s' }}
