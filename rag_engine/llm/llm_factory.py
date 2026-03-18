@@ -32,6 +32,16 @@ def get_llm(
             kwargs["model"] = model
         llm = GeminiLLM(**kwargs)
 
+    elif provider == "groq":
+        from .groq_llm import GroqLLM
+
+        kwargs = {}
+        if max_tokens:
+            kwargs["max_tokens"] = max_tokens
+        if model:
+            kwargs["model"] = model
+        llm = GroqLLM(**kwargs)
+
     elif provider == "kimi":
         from .kimi_llm import KimiLLM
 

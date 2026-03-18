@@ -22,6 +22,10 @@ class Settings(BaseSettings):
     kimi_base_url: str = "https://api.moonshot.ai/v1"
     kimi_model: str = "moonshot-v1-8k"
 
+    # groq
+    groq_api_key: str = ""
+    groq_model: str = "openai/gpt-oss-20b"
+
     # optional provider keys
     openai_api_key: str = ""
     jina_api_key: str = ""
@@ -37,8 +41,8 @@ class Settings(BaseSettings):
     embedding_dimension: int = 768
 
     # llm
-    llm_provider: str = "gemini"
-    llm_model: str = "gemini-3-flash-preview"
+    llm_provider: str = "groq"
+    llm_model: str = "openai/gpt-oss-20b"
 
     # reranker
     reranker_provider: str = "cross_encoder"
