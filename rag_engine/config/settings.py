@@ -15,8 +15,10 @@ class Settings(BaseSettings):
     supabase_service_key: str
 
     # kimi / moonshot
+    # moonshot-v1-8k = fast (5-8s), reliable, not overloaded
+    # kimi-k2.5 = slow reasoning model (30-40s), avoid for production
     kimi_base_url: str = "https://api.moonshot.ai/v1"
-    kimi_model: str = "kimi-k2.5"
+    kimi_model: str = "moonshot-v1-8k"
 
     # optional provider keys
     openai_api_key: str = ""
@@ -27,14 +29,14 @@ class Settings(BaseSettings):
     vector_table_name: str = "policy_chunks"
     vector_store_provider: str = "supabase"
 
-    # embedding — local by default
-    embedding_provider: str = "local"
-    embedding_model: str = "BAAI/bge-base-en-v1.5"
+    # embedding
+    embedding_provider: str = "jina"
+    embedding_model: str = "jina-embeddings-v3"
     embedding_dimension: int = 768
 
     # llm
     llm_provider: str = "kimi"
-    llm_model: str = "kimi-k2.5"
+    llm_model: str = "moonshot-v1-8k"
 
     # reranker
     reranker_provider: str = "cross_encoder"

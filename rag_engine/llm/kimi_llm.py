@@ -18,7 +18,7 @@ class KimiLLM(BaseLLM):
     def __init__(
         self,
         model: str | None = None,
-        temperature: float = 1,
+        temperature: float = 0.3,
         max_tokens: int = 4096,
     ) -> None:
         self._model = model or settings.kimi_model
@@ -45,9 +45,9 @@ class KimiLLM(BaseLLM):
         return self.complete_with_messages(messages)
 
     # ------------------------------------------------------------------ #
-    #  complete_with_messages
+    #  complete_with_messages — retries with longer waits for 429 overload
     # ------------------------------------------------------------------ #
-    @with_retry(max_retries=3, delay=2.0, backoff=2.0)
+    @with_retry(max_retries=4, delay=5.0, backoff=2.0)
     def complete_with_messages(self, messages: list[dict]) -> str:
         response = self._client.chat.completions.create(
             model=self._model,
@@ -58,7 +58,8 @@ class KimiLLM(BaseLLM):
         )
         result = response.choices[0].message.content
         logger.info(
-            "KimiLLM response | tokens_used=%s | chars=%d",
+            "KimiLLM response | model=%s | tokens_used=%s | chars=%d",
+            self._model,
             response.usage.total_tokens if response.usage else "N/A",
             len(result) if result else 0,
         )
