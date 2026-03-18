@@ -264,7 +264,6 @@ export default function Dboard({ file, isDark: initDark = true }) {
     if (picked) processFile(picked);
   }, [processFile]);
 
-<<<<<<< HEAD
   const viewPolicy = useCallback((item) => {
     if (item.analysis) {
       // Already cached locally — render immediately
@@ -279,11 +278,6 @@ export default function Dboard({ file, isDark: initDark = true }) {
       // Not cached — fetch summary from backend
       fetchSummary(item.id);
     }
-=======
-  // ── Open the single shared file picker ───────────────────────────────────
-  const openFilePicker = useCallback(() => {
-    if (!isProcessingRef.current) fileInputRef.current?.click();
->>>>>>> parent of 574f0d7 (made changes to app.jsx logic,enhanced dashboard fixed upload changes)
   }, []);
 
   // ── Chat send ─────────────────────────────────────────────────────────────
@@ -583,20 +577,10 @@ export default function Dboard({ file, isDark: initDark = true }) {
               <span style={{ ...f, fontSize: 12, color: T.t3 }}>{item.insurer}</span>
             </div>
           </div>
-<<<<<<< HEAD
           <div style={{ display:'flex', gap:8 }}>
             <button
               onClick={() => viewPolicy(item)}
               style={{ display:'flex', alignItems:'center', gap:6, padding:'7px 14px', borderRadius:10, cursor:'pointer', border:`1px solid ${T.navActiveBrd}`, background:T.navActiveBg, color:T.navActiveClr, ...f, fontSize:12, fontWeight:500, transition:'all .2s' }}
-=======
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button
-              onClick={() => {
-                if (item.analysis) { setActiveAnalysis(item.analysis); setActiveTab('home'); }
-                else { fetchSummary(item.id); }
-              }}
-              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 10, cursor: 'pointer', border: `1px solid ${T.navActiveBrd}`, background: T.navActiveBg, color: T.navActiveClr, ...f, fontSize: 12, fontWeight: 500, transition: 'all .2s' }}
->>>>>>> parent of 574f0d7 (made changes to app.jsx logic,enhanced dashboard fixed upload changes)
             >
               <Eye size={13} /> View
             </button>
