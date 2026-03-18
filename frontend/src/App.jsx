@@ -16,6 +16,12 @@ export default function App() {
   const [userName, setUserName] = useState('');
   const [authError, setAuthError] = useState('');
   const [initialPolicyId, setInitialPolicyId] = useState(null);
+  const [isAuthResolving, setIsAuthResolving] = useState(() => {
+    const hash = window.location.hash || '';
+    const hasOAuthFragment = hash.includes('access_token=') || hash.includes('refresh_token=');
+    const hasOAuthIntent = localStorage.getItem('oauth_redirect_intent') === 'google';
+    return hasOAuthFragment || hasOAuthIntent;
+  });
   const lastOAuthSyncKey = useRef('');
 
   const getRouteFromHash = (rawHash) => {
@@ -122,8 +128,13 @@ export default function App() {
 
       setUserName(nextName || '');
 
-      const currentState = window.location.hash.replace('#', '') || 'home';
-      if (currentState === 'login' || currentState === 'home') {
+      const currentHash = window.location.hash || '';
+      const currentState = getRouteFromHash(currentHash);
+      const fromOAuthCallback = currentHash.includes('access_token=') || currentHash.includes('refresh_token=');
+      const oauthIntent = localStorage.getItem('oauth_redirect_intent') === 'google';
+
+      if (currentState === 'login' || fromOAuthCallback || oauthIntent) {
+        localStorage.removeItem('oauth_redirect_intent');
         redirectToDashboard();
       }
     };
@@ -131,21 +142,28 @@ export default function App() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
-      void syncSession(session, event);
+      void syncSession(session, event).finally(() => {
+        setIsAuthResolving(false);
+      });
     });
 
-    void supabase.auth.getSession().then(({ data }) => syncSession(data.session));
+    void supabase.auth.getSession()
+      .then(({ data }) => syncSession(data.session))
+      .finally(() => {
+        setIsAuthResolving(false);
+      });
 
     return () => subscription.unsubscribe();
   }, []);
 
   useEffect(() => {
     const hash = window.location.hash || '';
-    const hasOAuthFragment = hash.includes('access_token=');
-    const initialState = getRouteFromHash(hash);
+    const hasOAuthFragment = hash.includes('access_token=') || hash.includes('refresh_token=');
+    const hasOAuthIntent = localStorage.getItem('oauth_redirect_intent') === 'google';
+    const initialState = (hasOAuthFragment || hasOAuthIntent) ? 'login' : getRouteFromHash(hash);
 
     // Keep OAuth fragment untouched initially so Supabase can parse and persist session.
-    if (!hasOAuthFragment) {
+    if (!hasOAuthFragment && !hasOAuthIntent) {
       window.history.replaceState({ appState: initialState }, '', `#${initialState}`);
     }
 
@@ -170,6 +188,26 @@ export default function App() {
     navigateTo('dboard');
   };
 
+  if (isAuthResolving) {
+    return (
+      <div
+        style={{
+          minHeight: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: isDark ? '#0c0908' : '#f9fafb',
+          color: isDark ? '#ecfeff' : '#111827',
+          fontFamily: "'DM Sans', sans-serif",
+          fontSize: 14,
+          letterSpacing: 0.2,
+        }}
+      >
+        Completing sign-in...
+      </div>
+    );
+  }
+
   // 1. DASHBOARD ROUTE
   if (appState === 'dboard' || appState === 'dashboard') {
     return (
@@ -178,8 +216,17 @@ export default function App() {
         toggleTheme={toggleTheme}
         userName={userName}
         initialPolicyId={initialPolicyId}
-        onLogout={() => {
+        onLogout={async () => {
+          localStorage.removeItem('token');
+          localStorage.removeItem('oauth_redirect_intent');
+          lastOAuthSyncKey.current = '';
+          setAuthError('');
           setUserName('');
+          try {
+            await supabase.auth.signOut();
+          } catch (err) {
+            console.error('Sign out error:', err);
+          }
           navigateTo('home');
         }}
         onTriggerUpload={() => navigateTo('upload')}

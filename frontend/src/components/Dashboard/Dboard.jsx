@@ -3,7 +3,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Upload, Clock, X, FileText, AlertTriangle, CheckCircle2,
   Shield, DollarSign, Calendar, Info, Trash2, Eye, FilePlus,
-  Home, Aperture, Sun, Moon, Menu, BadgeCheck, Banknote,
+  Home, Aperture, Sun, Moon, Menu, BadgeCheck, Banknote, LogOut,
   RefreshCw, Send, Loader2,
 } from 'lucide-react';
 import { fetchApi, streamApi } from '../../api';
@@ -144,7 +144,7 @@ function UploadZone({ T, dark, isDragging, uploading, uploadPct, onDragOver, onD
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-export default function Dboard({ file, isDark: _initDark, userName = 'My Account', initialPolicyId = null, onTriggerUpload }) {
+export default function Dboard({ file, isDark: _initDark, userName = 'My Account', initialPolicyId = null, onTriggerUpload, onLogout }) {
   // Always boot light — user can toggle via sidebar
   const [dark,            setDark]           = useState(false);
   const [sidebarOpen,     setSidebarOpen]    = useState(true);
@@ -160,6 +160,7 @@ export default function Dboard({ file, isDark: _initDark, userName = 'My Account
   const [chatOpen,        setChatOpen]       = useState(false);
   const [chatInput,       setChatInput]      = useState('');
   const [isTyping,        setIsTyping]       = useState(false);
+  const [isSigningOut,    setIsSigningOut]   = useState(false);
   const [chatDimensions,  setChatDimensions] = useState({ w: 360, h: 500 });
   const [chatMessagesMap, setChatMessagesMap] = useState({
     default: [makeWelcomeMsg(file?.name ?? null)],
@@ -457,6 +458,16 @@ export default function Dboard({ file, isDark: _initDark, userName = 'My Account
     }
   };
 
+  const handleSignOut = async () => {
+    if (!onLogout || isSigningOut) return;
+    setIsSigningOut(true);
+    try {
+      await onLogout();
+    } finally {
+      setIsSigningOut(false);
+    }
+  };
+
   // ════════════════════════ SUB-COMPONENTS ══════════════════════════════════
 
   const IrisAvatar = ({ size=40 }) => (
@@ -722,6 +733,24 @@ export default function Dboard({ file, isDark: _initDark, userName = 'My Account
         </nav>
 
         <div style={{ padding:'12px 8px', borderTop:`1px solid ${T.headerBorder}` }}>
+          <button onClick={handleSignOut}
+            disabled={!onLogout || isSigningOut}
+            style={{ width:'100%', display:'flex', alignItems:'center', gap:12, padding: sidebarOpen ? '10px 14px' : '10px', justifyContent: sidebarOpen ? 'flex-start' : 'center', borderRadius:12, cursor: !onLogout || isSigningOut ? 'not-allowed' : 'pointer', background:T.redBg, border:`1px solid ${T.redBrd}`, color:T.redClr, ...f, fontSize:13, fontWeight:600, transition:'all .2s', opacity: !onLogout || isSigningOut ? 0.6 : 1, marginBottom:8 }}
+            onMouseEnter={e => {
+              if (!isSigningOut && onLogout) {
+                e.currentTarget.style.filter = 'brightness(1.03)';
+                e.currentTarget.style.transform = 'scale(1.02)';
+              }
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.filter = 'none';
+              e.currentTarget.style.transform = 'none';
+            }}
+          >
+            <LogOut size={15} style={{ flexShrink:0 }} />
+            {sidebarOpen && <span>{isSigningOut ? 'Signing Out...' : 'Sign Out'}</span>}
+          </button>
+
           <button onClick={() => setDark(v => !v)}
             style={{ width:'100%', display:'flex', alignItems:'center', gap:12, padding: sidebarOpen ? '10px 14px' : '10px', justifyContent: sidebarOpen ? 'flex-start' : 'center', borderRadius:12, cursor:'pointer', background:T.cardBg, border:`1px solid ${T.cardBorder}`, color:T.t3, ...f, fontSize:13, fontWeight:500, boxShadow:T.cardShadow, transition:'all .2s' }}
             onMouseEnter={e => { e.currentTarget.style.borderColor=T.acc; e.currentTarget.style.color=T.acc; e.currentTarget.style.transform='scale(1.02)'; }}

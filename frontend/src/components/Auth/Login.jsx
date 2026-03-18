@@ -765,6 +765,7 @@ export default function LoginPage({ onLoginSuccess, onGoogleSuccess, onSignupSuc
     setGoogleLoading(true);
 
     try {
+      localStorage.setItem('oauth_redirect_intent', 'google');
       const redirectTo = `${window.location.origin}${window.location.pathname}`;
       const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
         provider: 'google',
@@ -781,8 +782,8 @@ export default function LoginPage({ onLoginSuccess, onGoogleSuccess, onSignupSuc
       if (!data?.url) throw new Error('Unable to start Google sign-in flow.');
 
       window.location.assign(data.url);
-      onGoogleSuccess?.();
     } catch (err) {
+      localStorage.removeItem('oauth_redirect_intent');
       triggerError(err.message || 'Google login failed. Please try again.');
       setGoogleLoading(false);
     }
