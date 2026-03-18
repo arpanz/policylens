@@ -14,6 +14,7 @@ export default function App() {
   const [appState, setAppState] = useState('home');
   const [userName, setUserName] = useState('');
   const [authError, setAuthError] = useState('');
+  const [initialPolicyId, setInitialPolicyId] = useState(null);
 
   useEffect(() => {
     console.log("Current App State:", appState);
@@ -92,11 +93,11 @@ export default function App() {
 
   const toggleTheme = () => setIsDark(!isDark);
 
-  const handleUploadComplete = () => {
+  const handleUploadComplete = (policyId) => {
     // UploadModal already completed the upload — just navigate to dashboard.
-    // Previously we stored the file and passed it to Dboard as a prop, which
-    // caused Dboard's mount effect to call processFile() a second time.
-    console.log("Upload finished! Routing to Dboard...");
+    // We store the received policy_id so Dboard knows which policy to open automatically.
+    console.log("Upload finished! Routing to Dboard with policy:", policyId);
+    setInitialPolicyId(policyId);
     navigateTo('dboard');
   };
 
@@ -107,6 +108,7 @@ export default function App() {
         isDark={isDark}
         toggleTheme={toggleTheme}
         userName={userName}
+        initialPolicyId={initialPolicyId}
         onLogout={() => {
           setUserName('');
           navigateTo('home');

@@ -211,6 +211,7 @@ export default function Dboard({ file, isDark: _initDark, userName = 'My Account
     const handleMouseMove = (e) => {
       if (!isResizingRef.current) return;
       e.preventDefault();
+      document.body.style.userSelect = 'none'; // Prevent text selection
       
       const dir = isResizingRef.current;
       setChatDimensions(prev => {
@@ -224,7 +225,10 @@ export default function Dboard({ file, isDark: _initDark, userName = 'My Account
       });
     };
     const handleMouseUp = () => {
-      isResizingRef.current = null;
+      if (isResizingRef.current) {
+        document.body.style.userSelect = '';
+        isResizingRef.current = null;
+      }
     };
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);

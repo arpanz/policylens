@@ -27,21 +27,28 @@ class SupabaseVectorStore(BaseVectorStore):
     # ------------------------------------------------------------------ #
     @with_retry(max_retries=3, delay=1.0, backoff=2.0)
     def add_chunks(self, chunks: list[tuple[str, list[float], dict]]) -> None:
+        from concurrent.futures import ThreadPoolExecutor
+
         rows = [
             {"content": text, "embedding": vector, "metadata": meta}
             for text, vector, meta in chunks
         ]
         total = (len(rows) + _BATCH_SIZE - 1) // _BATCH_SIZE
-        for i in range(0, len(rows), _BATCH_SIZE):
-            batch = rows[i : i + _BATCH_SIZE]
-            batch_num = i // _BATCH_SIZE + 1
-            logger.info("Inserting batch %d/%d (%d rows) to Supabase...", batch_num, total, len(batch))
+        batches = [rows[i : i + _BATCH_SIZE] for i in range(0, len(rows), _BATCH_SIZE)]
+
+        def _insert_batch(batch_data: tuple[int, list[dict]]):
+            b_num, b_rows = batch_data
+            logger.info("Inserting batch %d/%d (%d rows) to Supabase...", b_num, total, len(b_rows))
             try:
-                res = self._client.table(self._table).insert(batch).execute()
-                logger.info("Batch %d/%d stored successfully (%d rows)", batch_num, total, len(batch))
+                self._client.table(self._table).insert(b_rows).execute()
+                logger.info("Batch %d/%d stored successfully (%d rows)", b_num, total, len(b_rows))
             except Exception as e:
-                logger.error("FAILED to store batch %d/%d: %s", batch_num, total, str(e))
+                logger.error("FAILED to store batch %d/%d: %s", b_num, total, str(e))
                 raise e
+
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            list(executor.map(_insert_batch, [(i + 1, b) for i, b in enumerate(batches)]))
+            
         logger.info("Successfully stored %d chunks in Supabase", len(chunks))
 
     # ------------------------------------------------------------------ #

@@ -137,6 +137,7 @@ export default function UploadModal({ onUploadComplete, onCancel }) {
   const [stage,      setStage]      = useState(-1);
   const [dark,       setDark]       = useState(false);
   const [backendMsg, setBackendMsg] = useState('');
+  const [processedPid, setProcessedPid] = useState(null);
 
   const fileRef    = useRef(null);
   const dragCounter = useRef(0);
@@ -185,6 +186,7 @@ export default function UploadModal({ onUploadComplete, onCancel }) {
           body: fd,
         });
         const pid = data.policy_id;
+        setProcessedPid(pid);
         setPct(20);
 
         // Poll for processing status every 2 s
@@ -230,11 +232,11 @@ export default function UploadModal({ onUploadComplete, onCancel }) {
       completedRef.current = true;
       const t1 = setTimeout(() => {
         setStatus('done');
-        setTimeout(() => onCompleteRef.current(file), 800);
+        setTimeout(() => onCompleteRef.current(processedPid), 800);
       }, 250);
       return () => clearTimeout(t1);
     }
-  }, [pct, status, file]); // ← onUploadComplete removed from deps
+  }, [pct, status, processedPid]); // ← onUploadComplete removed from deps
 
   const validateAndPick = useCallback((f) => {
     setError('');

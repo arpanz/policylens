@@ -40,13 +40,20 @@ class JinaEmbedder(BaseEmbedder):
         return self._call_api([text])[0]
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
-        """Process in batches of 100 (Jina API limit)."""
-        all_embeddings: list[list[float]] = []
+        """Process in batches of 100 (Jina API limit) concurrently."""
+        from concurrent.futures import ThreadPoolExecutor
+        
         batch_size = 100
-
-        for i in range(0, len(texts), batch_size):
-            batch = texts[i : i + batch_size]
-            all_embeddings.extend(self._call_api(batch))
+        batches = [texts[i : i + batch_size] for i in range(0, len(texts), batch_size)]
+        
+        all_embeddings: list[list[float]] = []
+        
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            # map preserves order
+            results = list(executor.map(self._call_api, batches))
+            
+        for r in results:
+            all_embeddings.extend(r)
 
         return all_embeddings
 
