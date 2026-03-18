@@ -7,8 +7,7 @@
 3. Paste the contents of `001_vector_store.sql` into the editor.
 4. Click **Run** (or press Ctrl+Enter).
 
-> [!IMPORTANT]
-> This migration must be run **once** by the backend team **before** any
+> IMPORTANT: This migration must be run **once** by the backend team **before** any
 > document ingestion is attempted. The RAG engine will fail to write
 > embeddings if the `policy_chunks` table does not exist.
 

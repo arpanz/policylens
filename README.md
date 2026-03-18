@@ -30,6 +30,24 @@ pinned: false
 
 ## Architecture
 
+```mermaid
+flowchart TD
+  A[Browser\nReact 19 + Vite 7 + Tailwind 4\nHome -> Login -> Upload -> Dashboard -> IRIS Chat]
+  B[Node.js Backend\nExpress + JWT Auth + Supabase SDK\n/auth/signup, /auth/login, /api/ingest/*, /api/query, /api/history]
+  C[Python RAG Engine\nFastAPI\nPDF Loader -> Cleaner -> Chunker -> Jina Embedder -> Retriever -> Reranker -> Kimi LLM]
+  D[Supabase\npolicy_chunks + policy_summaries + policies + users + chat_history]
+
+  A -->|REST localhost:4000| B
+  B -->|HTTP proxy localhost:8000| C
+  C --> D
+```
+
+Architecture flow (text fallback):
+
+- Browser UI calls Node.js backend on `localhost:4000`.
+- Node.js proxies ingestion/query requests to Python RAG engine on `localhost:8000`.
+- Python RAG engine reads/writes vectors, summaries, policies, and chat history in Supabase.
+
 ```
 ┌────────────────────────────────────────────────────────────┐
 │                        Browser                              │
@@ -62,17 +80,15 @@ pinned: false
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| Frontend | React 19, Vite 7, Tailwind CSS 4, Lucide React |
-| Backend | Node.js, Express, JWT, Supabase JS SDK |
-| RAG Engine | Python 3.11, FastAPI, Uvicorn |
-| PDF Parsing | pymupdf4llm (local, ~0.2s) |
-| Embeddings | Jina Embeddings v3 API (768-dim) |
-| Vector Store | Supabase pgvector |
-| Reranker | sentence-transformers CrossEncoder |
-| LLM | Kimi / Moonshot AI (kimi-k2.5) |
-| Database | Supabase (PostgreSQL) |
+- Frontend: React 19, Vite 7, Tailwind CSS 4, Lucide React
+- Backend: Node.js, Express, JWT, Supabase JS SDK
+- RAG Engine: Python 3.11, FastAPI, Uvicorn
+- PDF Parsing: pymupdf4llm (local, ~0.2s)
+- Embeddings: Jina Embeddings v3 API (768-dim)
+- Vector Store: Supabase pgvector
+- Reranker: sentence-transformers CrossEncoder
+- LLM: Kimi / Moonshot AI (kimi-k2.5)
+- Database: Supabase (PostgreSQL)
 
 ---
 
@@ -248,39 +264,42 @@ npm run dev
 
 ### Auth (Node.js — port 4000)
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/auth/signup` | Register with email + password |
-| POST | `/auth/login` | Login, returns JWT token |
+- POST `/auth/signup`: Register with email + password
+- POST `/auth/login`: Login, returns JWT token
 
 ### Ingest (Node.js proxy → Python)
 
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| POST | `/api/ingest/upload` | ✅ | Upload PDF, starts background ingestion |
-| GET | `/api/ingest/status/:policy_id` | ✅ | Poll ingestion progress (0–100%) |
-| GET | `/api/ingest/summary/:policy_id` | ✅ | Get structured policy summary |
+- POST `/api/ingest/upload` (auth required): Upload PDF, starts background ingestion
+- GET `/api/ingest/status/:policy_id` (auth required): Poll ingestion progress (0–100%)
+- GET `/api/ingest/summary/:policy_id` (auth required): Get structured policy summary
 
 ### Query (Node.js proxy → Python)
 
-| Method | Endpoint | Auth | Body | Description |
-|--------|----------|------|------|-------------|
-| POST | `/api/query` | ✅ | `{ question, policy_id }` | Single-turn RAG query |
-| POST | `/api/query/stream` | ✅ | `{ question, policy_id }` | Streaming token response |
+- POST `/api/query` (auth required), body `{ question, policy_id }`: Single-turn RAG query
+- POST `/api/query/stream` (auth required), body `{ question, policy_id }`: Streaming token response
 
 ### History (Node.js → Supabase)
 
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| GET | `/api/history` | ✅ | Get all chat history for current user |
-| POST | `/api/history` | ✅ | Save a chat message |
-| DELETE | `/api/history/:policy_id` | ✅ | Clear history for a policy |
+- GET `/api/history` (auth required): Get all chat history for current user
+- POST `/api/history` (auth required): Save a chat message
+- DELETE `/api/history/:policy_id` (auth required): Clear history for a policy
 
 > All `/api/*` routes require `Authorization: Bearer <token>` header.
 
 ---
 
 ## Ingestion Pipeline
+
+```mermaid
+flowchart TD
+    A[PDF Upload] --> B[PyMuPDF local parser ~0.2s]
+    B --> C[Text Cleaner]
+    C --> D[Semantic Chunker ~31 chunks per 20-page doc]
+    D --> E[Jina Embeddings v3 768-dim batches of 100]
+    E --> F[Supabase pgvector batch upsert]
+    F --> G[Auto Summary via Kimi LLM top-15 chunks]
+    G --> H[Status ready]
+```
 
 ```
 PDF Upload
@@ -306,6 +325,17 @@ Set `USE_LLAMAPARSE=true` in `.env` to fall back to LlamaParse cloud parsing.
 
 ## Query Pipeline
 
+```mermaid
+flowchart TD
+    A[User Question] --> B[Query Preprocessor]
+    B --> C[Jina embed_query single vector]
+    C --> D[pgvector similarity_search k=8]
+    D --> E[CrossEncoder Reranker top 5]
+    E --> F[Context Builder ~3400 tokens]
+    F --> G[Kimi LLM stream or complete]
+    G --> H[Response + Sources]
+```
+
 ```
 User Question
   ↓
@@ -330,26 +360,22 @@ Response + Sources
 
 ### Root `.env` (Python RAG Engine)
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `MOONSHOT_API_KEY` | ✅ | Kimi/Moonshot API key |
-| `SUPABASE_URL` | ✅ | Supabase project URL |
-| `SUPABASE_SERVICE_KEY` | ✅ | Supabase service role key |
-| `JINA_API_KEY` | ✅ | Jina AI API key |
-| `EMBEDDING_PROVIDER` | ✅ | `jina` or `local` |
-| `LLAMA_CLOUD_API_KEY` | — | Only needed if `USE_LLAMAPARSE=true` |
-| `USE_LLAMAPARSE` | — | Set `true` to use LlamaParse instead of PyMuPDF |
-| `DEBUG` | — | `true` for verbose logs |
+- `MOONSHOT_API_KEY` (required): Kimi/Moonshot API key
+- `SUPABASE_URL` (required): Supabase project URL
+- `SUPABASE_SERVICE_KEY` (required): Supabase service role key
+- `JINA_API_KEY` (required): Jina AI API key
+- `EMBEDDING_PROVIDER` (required): `jina` or `local`
+- `LLAMA_CLOUD_API_KEY` (optional): Only needed if `USE_LLAMAPARSE=true`
+- `USE_LLAMAPARSE` (optional): Set `true` to use LlamaParse instead of PyMuPDF
+- `DEBUG` (optional): `true` for verbose logs
 
 ### `backend/.env`
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `PORT` | — | Default `4000` |
-| `SUPABASE_URL` | ✅ | Same as above |
-| `SUPABASE_SERVICE_KEY` | ✅ | Same as above |
-| `JWT_SECRET` | ✅ | Any random string for signing tokens |
-| `PYTHON_API_URL` | ✅ | Default `http://localhost:8000` |
+- `PORT` (optional): Default `4000`
+- `SUPABASE_URL` (required): Same as above
+- `SUPABASE_SERVICE_KEY` (required): Same as above
+- `JWT_SECRET` (required): Any random string for signing tokens
+- `PYTHON_API_URL` (required): Default `http://localhost:8000`
 
 ---
 
