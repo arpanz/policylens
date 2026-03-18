@@ -1,4 +1,4 @@
-// src/components/Dashboard/Dboard.jsx
+// src/components/Dashboard/Dboard.jsx  ── FULL VERSION (frontend + backend)
 import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Upload, Clock, X, FileText, AlertTriangle, CheckCircle2,
@@ -86,53 +86,24 @@ const makeWelcomeMsg = (policyName) => ({
     : "Hello, I'm IRIS. Upload an insurance policy and I'll analyze every clause, benefit, and exclusion for you.",
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// UploadZone lives OUTSIDE Dboard so React never remounts it mid-render.
-// ─────────────────────────────────────────────────────────────────────────────
 function UploadZone({ T, dark, isDragging, onDragOver, onDragLeave, onDrop, onClick, onChoose }) {
   const syne = { fontFamily:"'Syne', sans-serif" };
   const f    = { fontFamily:"'DM Sans', sans-serif" };
-
   return (
     <div
-      onDragOver={onDragOver}
-      onDragLeave={onDragLeave}
-      onDrop={onDrop}
-      onClick={onClick}
-      style={{
-        borderRadius:20, padding:'52px 24px',
-        border:`2px dashed ${isDragging ? T.acc : T.cardBorder}`,
-        background: isDragging ? T.accBg : T.headerBg,
-        cursor:'pointer', transition:'all .3s',
-        display:'flex', flexDirection:'column',
-        alignItems:'center', justifyContent:'center',
-        gap:20, textAlign:'center',
-      }}
+      onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop} onClick={onClick}
+      style={{ borderRadius:20, padding:'52px 24px', border:`2px dashed ${isDragging ? T.acc : T.cardBorder}`, background: isDragging ? T.accBg : T.headerBg, cursor:'pointer', transition:'all .3s', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:20, textAlign:'center' }}
     >
-      <div style={{
-        width:64, height:64, borderRadius:18, flexShrink:0,
-        display:'flex', alignItems:'center', justifyContent:'center',
-        background:T.accBg, border:`1px solid ${T.cardBorder}`,
-      }}>
+      <div style={{ width:64, height:64, borderRadius:18, flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center', background:T.accBg, border:`1px solid ${T.cardBorder}` }}>
         <Upload size={28} style={{ color:T.acc }} />
       </div>
       <div>
-        <p style={{ ...syne, fontSize:16, fontWeight:600, color:T.t1, margin:'0 0 4px 0' }}>
-          Upload your insurance policy
-        </p>
-        <p style={{ ...f, fontSize:13, color:T.t3, margin:0 }}>
-          Drag & drop or click to browse · PDF, DOC up to 20MB
-        </p>
+        <p style={{ ...syne, fontSize:16, fontWeight:600, color:T.t1, margin:'0 0 4px 0' }}>Upload your insurance policy</p>
+        <p style={{ ...f, fontSize:13, color:T.t3, margin:0 }}>Drag & drop or click to browse · PDF, DOC up to 20MB</p>
       </div>
       <button
         onClick={e => { e.stopPropagation(); onChoose(); }}
-        style={{
-          display:'flex', alignItems:'center', gap:8, padding:'10px 26px',
-          borderRadius:12, border:'none', background:T.accGrad, cursor:'pointer',
-          color: dark ? '#0c0908' : '#ffffff',
-          ...syne, fontSize:14, fontWeight:600,
-          boxShadow:T.msgUserShadow, marginTop:4,
-        }}
+        style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 26px', borderRadius:12, border:'none', background:T.accGrad, cursor:'pointer', color: dark ? '#0c0908' : '#ffffff', ...syne, fontSize:14, fontWeight:600, boxShadow:T.msgUserShadow, marginTop:4 }}
       >
         <FilePlus size={16} /> Choose File
       </button>
@@ -140,13 +111,11 @@ function UploadZone({ T, dark, isDragging, onDragOver, onDragLeave, onDrop, onCl
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 export default function Dboard({ file, isDark: _initDark, userName = 'My Account', initialPolicyId = null }) {
-  // Always boot light — user can toggle via sidebar.
   const [dark,            setDark]           = useState(false);
   const [sidebarOpen,     setSidebarOpen]    = useState(true);
   const [activeTab,       setActiveTab]      = useState('home');
-  const [history,         setHistory]        = useState([]);        // no hardcoded data
+  const [history,         setHistory]        = useState([]);
   const [activeAnalysis,  setActiveAnalysis] = useState(null);
   const [activePolicyId,  setActivePolicyId] = useState('default');
   const [isDragging,      setIsDragging]     = useState(false);
@@ -154,13 +123,14 @@ export default function Dboard({ file, isDark: _initDark, userName = 'My Account
   const [chatInput,       setChatInput]      = useState('');
   const [isTyping,        setIsTyping]       = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
+  const [loadingPolicyId, setLoadingPolicyId] = useState(null);
   const [chatMessagesMap, setChatMessagesMap] = useState({
     default: [makeWelcomeMsg(file?.name ?? null)],
   });
 
   const chatEnd          = useRef(null);
   const hasAutoProcessed = useRef(false);
-  const chatMessages = chatMessagesMap[activePolicyId] ?? chatMessagesMap['default'];
+  const chatMessages     = chatMessagesMap[activePolicyId] ?? chatMessagesMap['default'];
 
   const T    = dark ? DARK : LIGHT;
   const f    = { fontFamily:"'DM Sans', sans-serif" };
@@ -168,7 +138,6 @@ export default function Dboard({ file, isDark: _initDark, userName = 'My Account
   const bbs  = { fontFamily:"'Bebas Neue', cursive" };
   const mono = { fontFamily:"'JetBrains Mono', monospace" };
 
-  // ── Font / keyframe injection ─────────────────────────────────────────────
   useEffect(() => {
     const link  = Object.assign(document.createElement('link'),  { rel:'stylesheet', href:FONT_LINK });
     const style = Object.assign(document.createElement('style'), { textContent:KEYFRAMES });
@@ -176,12 +145,10 @@ export default function Dboard({ file, isDark: _initDark, userName = 'My Account
     return () => { link.remove(); style.remove(); };
   }, []);
 
-  // ── Auto-scroll chat ──────────────────────────────────────────────────────
   useEffect(() => {
     chatEnd.current?.scrollIntoView({ behavior:'smooth' });
   }, [chatMessages, isTyping]);
 
-  // ── Load history on mount; auto-process file prop once if provided ─────────
   useEffect(() => {
     loadHistory();
     if (initialPolicyId && !hasAutoProcessed.current) {
@@ -194,7 +161,7 @@ export default function Dboard({ file, isDark: _initDark, userName = 'My Account
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Backend: fetch policy list ────────────────────────────────────────────
+  // ── Backend: load policy list ─────────────────────────────────────────────
   const loadHistory = async () => {
     try {
       const data = await fetchApi('/policies');
@@ -211,71 +178,78 @@ export default function Dboard({ file, isDark: _initDark, userName = 'My Account
     }
   };
 
-  // ── Backend: fetch summary for a policy and show it ───────────────────────
-  const fetchSummary = async (policyId) => {
+  // ── Backend: fetch summary ────────────────────────────────────────────────
+  // useCallback so viewPolicy can safely list it as a dep (no stale closure)
+  const fetchSummary = useCallback(async (policyId) => {
+    setLoadingPolicyId(policyId);
+    // Navigate immediately so user sees feedback right away
+    setActivePolicyId(policyId);
+    setActiveTab('home');
+    setActiveAnalysis(null);
     try {
       const data = await fetchApi(`/policies/${policyId}/summary`);
       if (data?.summary) {
         const summary     = data.summary;
         const displayName = summary.policy_name ?? summary.filename ?? String(policyId);
         setActiveAnalysis(summary);
-        setActivePolicyId(policyId);
-        setActiveTab('home');
-        // Update the history entry with the resolved display name + cached analysis
         setHistory(h => h.map(x =>
           x.id === policyId ? { ...x, filename: displayName, analysis: summary } : x
         ));
-        // Init a chat thread for this policy if one doesn't exist yet
         setChatMessagesMap(prev =>
           prev[policyId] ? prev : { ...prev, [policyId]: [makeWelcomeMsg(displayName)] }
         );
+      } else {
+        // Backend returned no summary yet — mark as pending
+        console.warn('Summary not ready for policy:', policyId);
+        setHistory(h => h.map(x =>
+          x.id === policyId ? { ...x, summaryPending: true } : x
+        ));
       }
     } catch (err) {
       console.error('Summary fetch failed:', err);
-      alert('Summary not yet generated or failed to load.');
+      setHistory(h => h.map(x =>
+        x.id === policyId ? { ...x, summaryPending: true } : x
+      ));
+    } finally {
+      setLoadingPolicyId(null);
     }
-  };
+  }, []);
 
-  // ── Called by UploadModal's onUploadComplete(file, policyId) ─────────────
-  // UploadModal has already uploaded the file and polled until ready.
-  // We just refresh history and pull the summary for the new policy.
+  // ── Called after UploadModal completes ────────────────────────────────────
   const processFile = useCallback(async (_file, policyId) => {
     await loadHistory();
     await fetchSummary(policyId);
-  }, []);
+  }, [fetchSummary]);
 
   const handleDragOver  = useCallback((e) => { e.preventDefault(); setIsDragging(true); }, []);
   const handleDragLeave = useCallback(() => setIsDragging(false), []);
   const handleDrop      = useCallback((e) => {
     e.preventDefault(); setIsDragging(false);
-    const picked = e.dataTransfer.files[0];
-    if (picked) setShowUploadModal(true);
+    if (e.dataTransfer.files[0]) setShowUploadModal(true);
   }, []);
   const handleZoneClick = useCallback(() => setShowUploadModal(true), []);
 
+  // Always navigate immediately; fetch if no cached analysis
   const viewPolicy = useCallback((item) => {
+    setActivePolicyId(item.id);
+    setActiveTab('home');
+    setChatMessagesMap(prev => {
+      if (prev[item.id]) return prev;
+      return { ...prev, [item.id]: [makeWelcomeMsg(item.filename)] };
+    });
     if (item.analysis) {
-      // Already cached locally — render immediately
       setActiveAnalysis(item.analysis);
-      setActivePolicyId(item.id);
-      setActiveTab('home');
-      setChatMessagesMap(prev => {
-        if (prev[item.id]) return prev;
-        return { ...prev, [item.id]: [makeWelcomeMsg(item.filename)] };
-      });
     } else {
-      // Not cached — fetch summary from backend
+      setActiveAnalysis(null);
       fetchSummary(item.id);
     }
-  }, []);
+  }, [fetchSummary]);
 
-  // ── Chat: real streaming via backend ─────────────────────────────────────
+  // ── Chat: real streaming ──────────────────────────────────────────────────
   const sendChat = async () => {
     if (!chatInput.trim() || isTyping) return;
     const text = chatInput;
-    const pid  = activePolicyId !== 'default'
-      ? activePolicyId
-      : (history.length > 0 ? history[0].id : null);
+    const pid  = activePolicyId !== 'default' ? activePolicyId : (history.length > 0 ? history[0].id : null);
 
     setChatMessagesMap(prev => ({
       ...prev,
@@ -286,17 +260,12 @@ export default function Dboard({ file, isDark: _initDark, userName = 'My Account
 
     try {
       if (!pid) throw new Error('Please upload and analyze a policy first.');
-
       const aiMsgId = Date.now() + 1;
       setChatMessagesMap(prev => ({
         ...prev,
         [activePolicyId]: [...(prev[activePolicyId] ?? []), { id:aiMsgId, sender:'ai', text:'' }],
       }));
-
-      await streamApi('/query/stream', {
-        method: 'POST',
-        body:   { question:text, policy_id:pid },
-      }, (token) => {
+      await streamApi('/query/stream', { method:'POST', body:{ question:text, policy_id:pid } }, (token) => {
         setChatMessagesMap(prev => ({
           ...prev,
           [activePolicyId]: prev[activePolicyId].map(m =>
@@ -317,7 +286,7 @@ export default function Dboard({ file, isDark: _initDark, userName = 'My Account
     }
   };
 
-  // ── Reusable primitives ───────────────────────────────────────────────────
+  // ── Primitives ────────────────────────────────────────────────────────────
   const IrisAvatar = ({ size=40 }) => (
     <div style={{ width:size, height:size, borderRadius:Math.round(size*0.28), flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center', background:T.accGrad, boxShadow:T.msgUserShadow }}>
       <Aperture size={Math.round(size*0.48)} color={dark ? '#0c0908' : '#ffffff'} />
@@ -327,8 +296,7 @@ export default function Dboard({ file, isDark: _initDark, userName = 'My Account
   const NavBtn = ({ id, icon:Icon, label }) => {
     const active = activeTab === id;
     return (
-      <button
-        onClick={() => setActiveTab(id)}
+      <button onClick={() => setActiveTab(id)}
         style={{ width:'100%', display:'flex', alignItems:'center', gap:12, padding: sidebarOpen ? '10px 14px' : '10px', justifyContent: sidebarOpen ? 'flex-start' : 'center', borderRadius:12, cursor:'pointer', border:`1px solid ${active ? T.navActiveBrd : 'transparent'}`, background: active ? T.navActiveBg : 'transparent', color: active ? T.navActiveClr : T.t3, ...f, fontSize:14, fontWeight:500, transition:'all .2s' }}
         onMouseEnter={e => { if (!active) e.currentTarget.style.background = T.navHoverBg; }}
         onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent'; }}
@@ -363,7 +331,6 @@ export default function Dboard({ file, isDark: _initDark, userName = 'My Account
     );
   };
 
-  // ── Analysis renderer ─────────────────────────────────────────────────────
   const renderAnalysis = (a) => (
     <div className="fade-in" style={{ display:'flex', flexDirection:'column', gap:20 }}>
       <div style={{ borderRadius:20, padding:'26px 30px', background:T.cardBg, border:`1px solid ${T.cardBorder}`, boxShadow:T.cardShadow }}>
@@ -375,7 +342,7 @@ export default function Dboard({ file, isDark: _initDark, userName = 'My Account
           </div>
           <div style={{ display:'flex', gap:8, flexWrap:'wrap', alignItems:'center' }}>
             <Badge label={a.policy_type} variant="acc" />
-            <Badge label="✓ Analyzed"   variant="green" />
+            <Badge label="✓ Analyzed" variant="green" />
           </div>
         </div>
       </div>
@@ -437,7 +404,6 @@ export default function Dboard({ file, isDark: _initDark, userName = 'My Account
     </div>
   );
 
-  // ── History renderer ──────────────────────────────────────────────────────
   const renderHistory = () => (
     <div className="fade-in" style={{ display:'flex', flexDirection:'column', gap:12 }}>
       {history.length === 0 && <div style={{ textAlign:'center', padding:'60px 0', color:T.t3, ...f }}>No documents analyzed yet.</div>}
@@ -457,12 +423,23 @@ export default function Dboard({ file, isDark: _initDark, userName = 'My Account
             </div>
           </div>
           <div style={{ display:'flex', gap:8 }}>
-            <button
-              onClick={() => viewPolicy(item)}
-              style={{ display:'flex', alignItems:'center', gap:6, padding:'7px 14px', borderRadius:10, cursor:'pointer', border:`1px solid ${T.navActiveBrd}`, background:T.navActiveBg, color:T.navActiveClr, ...f, fontSize:12, fontWeight:500, transition:'all .2s' }}
-            >
-              <Eye size={13} /> View
-            </button>
+            {item.summaryPending ? (
+              // Backend hasn't generated the summary yet
+              <span style={{ display:'flex', alignItems:'center', gap:6, padding:'7px 14px', borderRadius:10, border:`1px solid ${T.amberBrd}`, background:T.amberBg, color:T.amberClr, ...f, fontSize:12, fontWeight:500 }}>
+                <Loader2 size={13} className="iris-spinner" /> Processing…
+              </span>
+            ) : (
+              <button
+                onClick={() => viewPolicy(item)}
+                disabled={loadingPolicyId === item.id}
+                style={{ display:'flex', alignItems:'center', gap:6, padding:'7px 14px', borderRadius:10, cursor: loadingPolicyId === item.id ? 'wait' : 'pointer', border:`1px solid ${T.navActiveBrd}`, background:T.navActiveBg, color:T.navActiveClr, opacity: loadingPolicyId === item.id ? 0.6 : 1, ...f, fontSize:12, fontWeight:500, transition:'all .2s' }}
+              >
+                {loadingPolicyId === item.id
+                  ? <><Loader2 size={13} className="iris-spinner" /> Loading…</>
+                  : <><Eye size={13} /> View</>
+                }
+              </button>
+            )}
             <button
               onClick={() => setHistory(h => h.filter(x => x.id !== item.id))}
               style={{ width:34, height:34, borderRadius:10, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', background:'transparent', border:`1px solid ${T.cardBorder}`, color:T.t3, transition:'all .2s' }}
@@ -481,7 +458,6 @@ export default function Dboard({ file, isDark: _initDark, userName = 'My Account
   return (
     <div style={{ display:'flex', height:'100vh', overflow:'hidden', background:T.pageBg, color:T.t1, ...f, transition:'background .4s, color .4s' }}>
 
-      {/* ── SIDEBAR ── */}
       <aside style={{ flexShrink:0, display:'flex', flexDirection:'column', width: sidebarOpen ? 240 : 66, background:T.sidebarBg, borderRight:`1px solid ${T.headerBorder}`, transition:'width .3s cubic-bezier(0.16,1,0.3,1)', overflow:'hidden' }}>
         <div style={{ display:'flex', alignItems:'center', gap:12, padding:'20px 16px', borderBottom:`1px solid ${T.headerBorder}`, justifyContent: sidebarOpen ? 'flex-start' : 'center' }}>
           {sidebarOpen && (
@@ -495,8 +471,7 @@ export default function Dboard({ file, isDark: _initDark, userName = 'My Account
               </div>
             </>
           )}
-          <button
-            onClick={() => setSidebarOpen(v => !v)}
+          <button onClick={() => setSidebarOpen(v => !v)}
             style={{ marginLeft: sidebarOpen ? 'auto' : 0, width:30, height:30, borderRadius:8, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', background:'transparent', border:`1px solid ${T.cardBorder}`, color:T.t3, transition:'all .2s', flexShrink:0 }}
             onMouseEnter={e => { e.currentTarget.style.borderColor=T.acc; e.currentTarget.style.color=T.acc; }}
             onMouseLeave={e => { e.currentTarget.style.borderColor=T.cardBorder; e.currentTarget.style.color=T.t3; }}
@@ -511,9 +486,7 @@ export default function Dboard({ file, isDark: _initDark, userName = 'My Account
           {sidebarOpen && activeTab === 'history' && (
             <div style={{ marginTop:8, display:'flex', flexDirection:'column', gap:2 }}>
               {history.map(item => (
-                <button
-                  key={item.id}
-                  onClick={() => viewPolicy(item)}
+                <button key={item.id} onClick={() => viewPolicy(item)}
                   style={{ display:'flex', alignItems:'flex-start', gap:10, padding:'10px 12px', borderRadius:10, cursor:'pointer', background:'transparent', border:'1px solid transparent', textAlign:'left', transition:'all .2s', width:'100%' }}
                   onMouseEnter={e => e.currentTarget.style.background = T.navHoverBg}
                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
@@ -530,8 +503,7 @@ export default function Dboard({ file, isDark: _initDark, userName = 'My Account
         </nav>
 
         <div style={{ padding:'12px 8px', borderTop:`1px solid ${T.headerBorder}` }}>
-          <button
-            onClick={() => setDark(v => !v)}
+          <button onClick={() => setDark(v => !v)}
             style={{ width:'100%', display:'flex', alignItems:'center', gap:12, padding: sidebarOpen ? '10px 14px' : '10px', justifyContent: sidebarOpen ? 'flex-start' : 'center', borderRadius:12, cursor:'pointer', background:T.cardBg, border:`1px solid ${T.cardBorder}`, color:T.t3, ...f, fontSize:13, fontWeight:500, boxShadow:T.cardShadow, transition:'all .2s' }}
             onMouseEnter={e => { e.currentTarget.style.borderColor=T.acc; e.currentTarget.style.color=T.acc; e.currentTarget.style.transform='scale(1.02)'; }}
             onMouseLeave={e => { e.currentTarget.style.borderColor=T.cardBorder; e.currentTarget.style.color=T.t3; e.currentTarget.style.transform='none'; }}
@@ -542,7 +514,6 @@ export default function Dboard({ file, isDark: _initDark, userName = 'My Account
         </div>
       </aside>
 
-      {/* ── MAIN AREA ── */}
       <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden' }}>
         <header style={{ flexShrink:0, display:'flex', alignItems:'center', gap:16, padding:'16px 28px', background:T.headerBg, borderBottom:`1px solid ${T.headerBorder}`, transition:'background .4s, border-color .4s' }}>
           <div style={{ flex:1 }}>
@@ -555,8 +526,7 @@ export default function Dboard({ file, isDark: _initDark, userName = 'My Account
                 : `${history.length} document${history.length !== 1 ? 's' : ''} analyzed`}
             </p>
           </div>
-          <button
-            onClick={() => setShowUploadModal(true)}
+          <button onClick={() => setShowUploadModal(true)}
             style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 20px', borderRadius:12, cursor:'pointer', border:'none', background:T.accGrad, color: dark ? '#0c0908' : '#ffffff', ...syne, fontSize:13, fontWeight:600, boxShadow:T.msgUserShadow, transition:'all .2s' }}
             onMouseEnter={e => e.currentTarget.style.transform='scale(1.03)'}
             onMouseLeave={e => e.currentTarget.style.transform='none'}
@@ -568,16 +538,24 @@ export default function Dboard({ file, isDark: _initDark, userName = 'My Account
         <div className="cb-scrollbar" style={{ flex:1, overflowY:'auto', padding:28, display:'flex', flexDirection:'column', gap:24, background:T.pageBg, transition:'background .4s' }}>
 
           {!activeAnalysis && (
-            <UploadZone
-              T={T} dark={dark}
-              isDragging={isDragging}
+            <UploadZone T={T} dark={dark} isDragging={isDragging}
               onDragOver={handleDragOver} onDragLeave={handleDragLeave}
               onDrop={handleDrop} onClick={handleZoneClick} onChoose={handleZoneClick}
             />
           )}
 
           {activeTab === 'home' && (
-            activeAnalysis ? renderAnalysis(activeAnalysis) : (
+            activeAnalysis ? renderAnalysis(activeAnalysis)
+            : loadingPolicyId ? (
+              // Fetching summary — show spinner instead of empty state
+              <div className="fade-in" style={{ borderRadius:24, padding:'72px 24px', textAlign:'center', background:T.cardBg, border:`1px solid ${T.cardBorder}`, boxShadow:T.cardShadow, display:'flex', flexDirection:'column', alignItems:'center', gap:20 }}>
+                <Loader2 size={48} className="iris-spinner" style={{ color:T.acc }} />
+                <div>
+                  <h2 style={{ ...bbs, fontSize:36, letterSpacing:2, color:T.t1, margin:'0 0 8px 0', lineHeight:1 }}>LOADING ANALYSIS</h2>
+                  <p style={{ ...f, fontSize:14, color:T.t3, margin:0 }}>Fetching policy summary from server…</p>
+                </div>
+              </div>
+            ) : (
               <div className="fade-in" style={{ borderRadius:24, padding:'72px 24px', textAlign:'center', background:T.cardBg, border:`1px solid ${T.cardBorder}`, boxShadow:T.cardShadow, display:'flex', flexDirection:'column', alignItems:'center', gap:20 }}>
                 <div style={{ width:80, height:80, borderRadius:24, display:'flex', alignItems:'center', justifyContent:'center', background:T.accGrad, boxShadow:`0 0 40px ${dark ? 'rgba(34,211,238,.2)' : 'rgba(13,148,136,.2)'}` }}>
                   <Aperture size={38} color={dark ? '#0c0908' : '#ffffff'} />
@@ -601,10 +579,8 @@ export default function Dboard({ file, isDark: _initDark, userName = 'My Account
         </div>
       </div>
 
-      {/* ── IRIS CHAT FAB ── */}
       {!chatOpen && (
-        <button
-          onClick={() => setChatOpen(true)}
+        <button onClick={() => setChatOpen(true)}
           style={{ position:'fixed', bottom:28, right:28, zIndex:100, width:58, height:58, borderRadius:18, border:'none', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', background:T.accGrad, boxShadow:`${T.msgUserShadow}, 0 0 30px ${dark ? 'rgba(34,211,238,.3)' : 'rgba(13,148,136,.25)'}`, transition:'transform .2s' }}
           onMouseEnter={e => e.currentTarget.style.transform='scale(1.08)'}
           onMouseLeave={e => e.currentTarget.style.transform='none'}
@@ -613,7 +589,6 @@ export default function Dboard({ file, isDark: _initDark, userName = 'My Account
         </button>
       )}
 
-      {/* ── IRIS CHAT PANEL ── */}
       {chatOpen && (
         <div className="fade-in" style={{ position:'fixed', bottom:28, right:28, zIndex:100, width:360, height:500, display:'flex', flexDirection:'column', borderRadius:24, overflow:'hidden', background:T.cardBg, border:`1px solid ${T.cardBorder}`, boxShadow:`${T.cardShadow}, 0 0 40px ${dark ? 'rgba(34,211,238,.15)' : 'rgba(13,148,136,.15)'}` }}>
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'16px 20px', background:T.headerBg, borderBottom:`1px solid ${T.headerBorder}` }}>
@@ -627,8 +602,7 @@ export default function Dboard({ file, isDark: _initDark, userName = 'My Account
                 </div>
               </div>
             </div>
-            <button
-              onClick={() => setChatOpen(false)}
+            <button onClick={() => setChatOpen(false)}
               style={{ width:30, height:30, borderRadius:8, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', background:'transparent', border:`1px solid ${T.cardBorder}`, color:T.t3, transition:'all .2s' }}
               onMouseEnter={e => { e.currentTarget.style.borderColor=T.redClr; e.currentTarget.style.color=T.redClr; }}
               onMouseLeave={e => { e.currentTarget.style.borderColor=T.cardBorder; e.currentTarget.style.color=T.t3; }}
@@ -670,8 +644,7 @@ export default function Dboard({ file, isDark: _initDark, userName = 'My Account
 
           <div style={{ padding:'14px 16px 18px', background:T.headerBg, borderTop:`1px solid ${T.headerBorder}` }}>
             <div style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 14px', borderRadius:14, background:T.inputBg, border:`1px solid ${T.inputBorder}`, transition:'border-color .2s' }}>
-              <input
-                type="text" value={chatInput}
+              <input type="text" value={chatInput}
                 onChange={e => setChatInput(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) sendChat(); }}
                 placeholder="Ask IRIS about this policy…"
@@ -679,9 +652,7 @@ export default function Dboard({ file, isDark: _initDark, userName = 'My Account
                 onFocus={e  => e.target.parentNode.style.borderColor = T.inputFocus}
                 onBlur={e   => e.target.parentNode.style.borderColor = T.inputBorder}
               />
-              <button
-                onClick={sendChat}
-                disabled={!chatInput.trim() || isTyping}
+              <button onClick={sendChat} disabled={!chatInput.trim() || isTyping}
                 style={{ flexShrink:0, width:34, height:34, borderRadius:10, border:'none', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', background: chatInput.trim() && !isTyping ? T.sendActive : T.sendDisabled, color: dark ? '#0c0908' : '#ffffff', opacity: chatInput.trim() && !isTyping ? 1 : 0.4, boxShadow: chatInput.trim() && !isTyping ? T.msgUserShadow : 'none', transition:'all .2s' }}
                 onMouseEnter={e => { if (chatInput.trim() && !isTyping) e.currentTarget.style.transform='scale(1.08)'; }}
                 onMouseLeave={e => e.currentTarget.style.transform='none'}
@@ -696,7 +667,6 @@ export default function Dboard({ file, isDark: _initDark, userName = 'My Account
         </div>
       )}
 
-      {/* ── UPLOAD MODAL ── */}
       {showUploadModal && (
         <UploadModal
           initDark={dark}
